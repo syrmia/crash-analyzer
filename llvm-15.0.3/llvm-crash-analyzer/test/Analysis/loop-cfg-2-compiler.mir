@@ -1,0 +1,520 @@
+## This test is dedicated to test the order of machine basic blocks traversing when loops exist.
+
+## The .c file is compiled by clang15 using the following command:
+## clang -emit-llvm -g -S test.c -o test.ll.
+## After that, the file test.ll is translated to test.mir using the following command:
+## llc -o test.mir -stop-after=livedebugvalues test.ll.
+
+## A content of the file test.c:
+##
+## int fn(int* t1) {
+##   int a;
+##   for(int i=0; i<4; i++){
+##     a=i;
+##   }
+##   t1 = (int*)a;
+##   return *t1;
+## }
+## 
+## int main() {
+##   int tmp =0;
+##   return fn(&tmp);
+## }
+
+# RUN: %llvm-crash-analyzer-ta -debug-only=taint-analysis %s 2>&1 | FileCheck %s
+
+# CHECK: MF: fn
+
+## The postorder traversal of the blocks is the following: BB.4-BB.3-BB.2-BB.1-BB.0. This is the consequence of the printed sequence of the successors of the block BB.1.
+## The postorder traversal visits all children of a node before visiting that node.
+
+## BB.4
+# CHECK: renamable $eax = crash-start MOV32rm killed renamable $rax, 1, $noreg, 0, $noreg
+# CHECK: Add to TL: {reg:killed renamable $rax; off:0}
+
+# CHECK: renamable $rax = MOV64rm $rbp, 1, $noreg, -16, $noreg
+# CHECK: Add to TL: {reg:$rbp; off:-16}
+# CHECK: Remove from TL: {reg:killed renamable $rax; off:0}
+
+# CHECK: MOV64mr $rbp, 1, $noreg, -16, $noreg, killed renamable $rax
+# CHECK: Add to TL: {reg:killed renamable $rax}
+# CHECK: Remove from TL: {reg:$rbp; off:-16}
+
+# CHECK: renamable $rax = MOVSX64rm32 $rbp, 1, $noreg, -8, $noreg
+# CHECK: Add to TL: {reg:$rbp; off:-8}
+# CHECK: Remove from TL: {reg:killed renamable $rax}
+
+## BB.3's and BB.2's taint lists are empty. If the block BB.1 were analyzed after BB.4 and before BB.3 and if BB.3 were analyzed before BB.2, the taint lists of BB.3 and BB.2 wouldn't be empty and the blame instruction would be found.
+# CHECK: Taint List is empty
+# CHECK: Taint List is empty
+
+## BB.1
+# CHECK: CMP32mi8 $rbp, 1, $noreg, -4, $noreg, 4, implicit-def $eflags
+
+## BB.0
+# CHECK: MOV32mi $rbp, 1, $noreg, -4, $noreg, 0
+
+# CHECK: MF: main
+
+## This is a wrong conclusion.
+# CHECK: Blame Function is main
+
+
+## Below is a content of the file test.mir. I changed the attributes crashOrder and regInfo, added flag crash-start, updated liveins and removed CFI_INSTRUCTIONs.
+
+--- |
+  ; ModuleID = 'compiled_mir/t16.ll'
+  source_filename = "input/test16.c"
+  target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+  target triple = "x86_64-unknown-linux-gnu"
+  
+  ; Function Attrs: noinline nounwind optnone uwtable
+  define dso_local i32 @fn(ptr noundef %t1) #0 !dbg !13 {
+  entry:
+    %t1.addr = alloca ptr, align 8
+    %a = alloca i32, align 4
+    %i = alloca i32, align 4
+    store ptr %t1, ptr %t1.addr, align 8
+    call void @llvm.dbg.declare(metadata ptr %t1.addr, metadata !17, metadata !DIExpression()), !dbg !18
+    call void @llvm.dbg.declare(metadata ptr %a, metadata !19, metadata !DIExpression()), !dbg !20
+    call void @llvm.dbg.declare(metadata ptr %i, metadata !21, metadata !DIExpression()), !dbg !23
+    store i32 0, ptr %i, align 4, !dbg !23
+    br label %for.cond, !dbg !24
+  
+  for.cond:                                         ; preds = %for.inc, %entry
+    %0 = load i32, ptr %i, align 4, !dbg !25
+    %cmp = icmp slt i32 %0, 4, !dbg !27
+    br i1 %cmp, label %for.body, label %for.end, !dbg !28
+  
+  for.body:                                         ; preds = %for.cond
+    %1 = load i32, ptr %i, align 4, !dbg !29
+    store i32 %1, ptr %a, align 4, !dbg !31
+    br label %for.inc, !dbg !32
+  
+  for.inc:                                          ; preds = %for.body
+    %2 = load i32, ptr %i, align 4, !dbg !33
+    %inc = add nsw i32 %2, 1, !dbg !33
+    store i32 %inc, ptr %i, align 4, !dbg !33
+    br label %for.cond, !dbg !34, !llvm.loop !35
+  
+  for.end:                                          ; preds = %for.cond
+    %3 = load i32, ptr %a, align 4, !dbg !38
+    %conv = sext i32 %3 to i64, !dbg !39
+    %4 = inttoptr i64 %conv to ptr, !dbg !39
+    store ptr %4, ptr %t1.addr, align 8, !dbg !40
+    %5 = load ptr, ptr %t1.addr, align 8, !dbg !41
+    %6 = load i32, ptr %5, align 4, !dbg !42
+    ret i32 %6, !dbg !43
+  }
+  
+  ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+  declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
+  
+  ; Function Attrs: noinline nounwind optnone uwtable
+  define dso_local i32 @main() #0 !dbg !44 {
+  entry:
+    %retval = alloca i32, align 4
+    %tmp = alloca i32, align 4
+    store i32 0, ptr %retval, align 4
+    call void @llvm.dbg.declare(metadata ptr %tmp, metadata !47, metadata !DIExpression()), !dbg !48
+    store i32 0, ptr %tmp, align 4, !dbg !48
+    %call = call i32 @fn(ptr noundef %tmp), !dbg !49
+    ret i32 %call, !dbg !50
+  }
+  
+  attributes #0 = { noinline nounwind optnone uwtable "frame-pointer"="all" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+  attributes #1 = { nocallback nofree nosync nounwind readnone speculatable willreturn }
+  
+  !llvm.dbg.cu = !{!0}
+  !llvm.module.flags = !{!5, !6, !7, !8, !9, !10, !11}
+  !llvm.ident = !{!12}
+  
+  !0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 15.0.3 (git@github.com:rakicaleksandar1999/llvm-crash-analyzer.git ad572a572291e3426223affaf34fa52b91bb768e)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, retainedTypes: !2, splitDebugInlining: false, nameTableKind: None)
+  !1 = !DIFile(filename: "input/test16.c", directory: "/home/syrmia/Desktop/llvm-crash-analyzer/tests", checksumkind: CSK_MD5, checksum: "f9cf062d78e0e866b19b489f4d14df19")
+  !2 = !{!3}
+  !3 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !4, size: 64)
+  !4 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+  !5 = !{i32 7, !"Dwarf Version", i32 5}
+  !6 = !{i32 2, !"Debug Info Version", i32 3}
+  !7 = !{i32 1, !"wchar_size", i32 4}
+  !8 = !{i32 7, !"PIC Level", i32 2}
+  !9 = !{i32 7, !"PIE Level", i32 2}
+  !10 = !{i32 7, !"uwtable", i32 2}
+  !11 = !{i32 7, !"frame-pointer", i32 2}
+  !12 = !{!"clang version 15.0.3 (git@github.com:rakicaleksandar1999/llvm-crash-analyzer.git ad572a572291e3426223affaf34fa52b91bb768e)"}
+  !13 = distinct !DISubprogram(name: "fn", scope: !1, file: !1, line: 2, type: !14, scopeLine: 2, flags: DIFlagPrototyped, spFlags: DISPFlagDefinition, unit: !0, retainedNodes: !16)
+  !14 = !DISubroutineType(types: !15)
+  !15 = !{!4, !3}
+  !16 = !{}
+  !17 = !DILocalVariable(name: "t1", arg: 1, scope: !13, file: !1, line: 2, type: !3)
+  !18 = !DILocation(line: 2, column: 13, scope: !13)
+  !19 = !DILocalVariable(name: "a", scope: !13, file: !1, line: 3, type: !4)
+  !20 = !DILocation(line: 3, column: 7, scope: !13)
+  !21 = !DILocalVariable(name: "i", scope: !22, file: !1, line: 4, type: !4)
+  !22 = distinct !DILexicalBlock(scope: !13, file: !1, line: 4, column: 3)
+  !23 = !DILocation(line: 4, column: 11, scope: !22)
+  !24 = !DILocation(line: 4, column: 7, scope: !22)
+  !25 = !DILocation(line: 4, column: 16, scope: !26)
+  !26 = distinct !DILexicalBlock(scope: !22, file: !1, line: 4, column: 3)
+  !27 = !DILocation(line: 4, column: 17, scope: !26)
+  !28 = !DILocation(line: 4, column: 3, scope: !22)
+  !29 = !DILocation(line: 5, column: 7, scope: !30)
+  !30 = distinct !DILexicalBlock(scope: !26, file: !1, line: 4, column: 25)
+  !31 = !DILocation(line: 5, column: 6, scope: !30)
+  !32 = !DILocation(line: 6, column: 3, scope: !30)
+  !33 = !DILocation(line: 4, column: 22, scope: !26)
+  !34 = !DILocation(line: 4, column: 3, scope: !26)
+  !35 = distinct !{!35, !28, !36, !37}
+  !36 = !DILocation(line: 6, column: 3, scope: !22)
+  !37 = !{!"llvm.loop.mustprogress"}
+  !38 = !DILocation(line: 7, column: 14, scope: !13)
+  !39 = !DILocation(line: 7, column: 8, scope: !13)
+  !40 = !DILocation(line: 7, column: 6, scope: !13)
+  !41 = !DILocation(line: 8, column: 11, scope: !13)
+  !42 = !DILocation(line: 8, column: 10, scope: !13)
+  !43 = !DILocation(line: 8, column: 3, scope: !13)
+  !44 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 11, type: !45, scopeLine: 11, spFlags: DISPFlagDefinition, unit: !0, retainedNodes: !16)
+  !45 = !DISubroutineType(types: !46)
+  !46 = !{!4}
+  !47 = !DILocalVariable(name: "tmp", scope: !44, file: !1, line: 12, type: !4)
+  !48 = !DILocation(line: 12, column: 7, scope: !44)
+  !49 = !DILocation(line: 13, column: 10, scope: !44)
+  !50 = !DILocation(line: 13, column: 3, scope: !44)
+
+...
+---
+name:            fn
+alignment:       16
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHCatchret:   false
+hasEHScopes:     false
+hasEHFunclets:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:
+  - { reg: '$rdi', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       8
+  offsetAdjustment: -8
+  maxAlignment:    8
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+  - { id: 0, type: spill-slot, offset: -16, size: 8, alignment: 16, stack-id: default, 
+      callee-saved-register: '', callee-saved-restored: true, debug-info-variable: '', 
+      debug-info-expression: '', debug-info-location: '' }
+stack:
+  - { id: 0, name: t1.addr, type: default, offset: -32, size: 8, alignment: 8, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '!17', debug-info-expression: '!DIExpression()', 
+      debug-info-location: '!18' }
+  - { id: 1, name: a, type: default, offset: -24, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '!19', debug-info-expression: '!DIExpression()', 
+      debug-info-location: '!20' }
+  - { id: 2, name: i, type: default, offset: -20, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '!21', debug-info-expression: '!DIExpression()', 
+      debug-info-location: '!23' }
+callSites:       []
+regInfo:         { GPRegs: 
+    - { reg: rax, value: '0x0000000000000003' }
+    - { reg: rbx, value: '0x0000000000000000' }
+    - { reg: rcx, value: '0x000055d0af8dfe20' }
+    - { reg: rdx, value: '0x00007ffe019e21d8' }
+    - { reg: rdi, value: '0x00007ffe019e20a8' }
+    - { reg: rsi, value: '0x00007ffe019e21c8' }
+    - { reg: rbp, value: '0x00007ffe019e2090' }
+    - { reg: rsp, value: '0x00007ffe019e2090' }
+    - { reg: r8, value: '0x00007f40f681af10' }
+    - { reg: r9, value: '0x00007f40f6915040' }
+    - { reg: r10, value: '0x00007f40f690f908' }
+    - { reg: r11, value: '0x00007f40f692a680' }
+    - { reg: r12, value: '0x00007ffe019e21c8' }
+    - { reg: r13, value: '0x000055d0af8dd170' }
+    - { reg: r14, value: '0x000055d0af8dfe20' }
+    - { reg: r15, value: '0x00007f40f6949040' }
+    - { reg: rip, value: '0x000055d0af8dd169' }
+    - { reg: rflags, value: '0x0000000000010246' }
+    - { reg: cs, value: '0x0000000000000033' }
+    - { reg: fs, value: '0x0000000000000000' }
+    - { reg: gs, value: '0x0000000000000000' }
+    - { reg: ss, value: '0x000000000000002b' }
+    - { reg: ds, value: '0x0000000000000000' }
+    - { reg: es, value: '0x0000000000000000' }
+    - { reg: eax, value: '0x00000003' }
+    - { reg: ebx, value: '0x00000000' }
+    - { reg: ecx, value: '0xaf8dfe20' }
+    - { reg: edx, value: '0x019e21d8' }
+    - { reg: edi, value: '0x019e20a8' }
+    - { reg: esi, value: '0x019e21c8' }
+    - { reg: ebp, value: '0x019e2090' }
+    - { reg: esp, value: '0x019e2090' }
+    - { reg: r8d, value: '0xf681af10' }
+    - { reg: r9d, value: '0xf6915040' }
+    - { reg: r10d, value: '0xf690f908' }
+    - { reg: r11d, value: '0xf692a680' }
+    - { reg: r12d, value: '0x019e21c8' }
+    - { reg: r13d, value: '0xaf8dd170' }
+    - { reg: r14d, value: '0xaf8dfe20' }
+    - { reg: r15d, value: '0xf6949040' }
+    - { reg: ax, value: '0x0003' }
+    - { reg: bx, value: '0x0000' }
+    - { reg: cx, value: '0xfe20' }
+    - { reg: dx, value: '0x21d8' }
+    - { reg: di, value: '0x20a8' }
+    - { reg: si, value: '0x21c8' }
+    - { reg: bp, value: '0x2090' }
+    - { reg: sp, value: '0x2090' }
+    - { reg: r8w, value: '0xaf10' }
+    - { reg: r9w, value: '0x5040' }
+    - { reg: r10w, value: '0xf908' }
+    - { reg: r11w, value: '0xa680' }
+    - { reg: r12w, value: '0x21c8' }
+    - { reg: r13w, value: '0xd170' }
+    - { reg: r14w, value: '0xfe20' }
+    - { reg: r15w, value: '0x9040' }
+    - { reg: ah, value: '0x00' }
+    - { reg: bh, value: '0x00' }
+    - { reg: ch, value: '0xfe' }
+    - { reg: dh, value: '0x21' }
+    - { reg: al, value: '0x03' }
+    - { reg: bl, value: '0x00' }
+    - { reg: cl, value: '0x20' }
+    - { reg: dl, value: '0xd8' }
+    - { reg: dil, value: '0xa8' }
+    - { reg: sil, value: '0xc8' }
+    - { reg: bpl, value: '0x90' }
+    - { reg: spl, value: '0x90' }
+    - { reg: r8l, value: '0x10' }
+    - { reg: r9l, value: '0x40' }
+    - { reg: r10l, value: '0x08' }
+    - { reg: r11l, value: '0x80' }
+    - { reg: r12l, value: '0xc8' }
+    - { reg: r13l, value: '0x70' }
+    - { reg: r14l, value: '0x20' }
+    - { reg: r15l, value: '0x40' } }
+regInfo:         { GPRegs: [] }
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo: {}
+crashOrder:      1
+body:             |
+  bb.0.entry:
+    successors: %bb.1(0x80000000)
+    liveins: $rbp, $rdi
+  
+    frame-setup PUSH64r killed $rbp, implicit-def $rsp, implicit $rsp
+    $rbp = frame-setup MOV64rr $rsp
+    MOV64mr $rbp, 1, $noreg, -16, $noreg, killed renamable $rdi :: (store (s64) into %ir.t1.addr)
+    MOV32mi $rbp, 1, $noreg, -4, $noreg, 0, debug-location !23 :: (store (s32) into %ir.i)
+  
+  bb.1.for.cond:
+    successors: %bb.4(0x40000000), %bb.2(0x40000000)
+    liveins: $rbp
+  
+    CMP32mi8 $rbp, 1, $noreg, -4, $noreg, 4, implicit-def $eflags, debug-location !27 :: (load (s32) from %ir.i)
+    JCC_1 %bb.4, 13, implicit killed $eflags, debug-location !28
+  
+  bb.2.for.body:
+    successors: %bb.3(0x80000000)
+    liveins: $rbp
+  
+    renamable $eax = MOV32rm $rbp, 1, $noreg, -4, $noreg, debug-location !29 :: (load (s32) from %ir.i)
+    MOV32mr $rbp, 1, $noreg, -8, $noreg, killed renamable $eax, debug-location !31 :: (store (s32) into %ir.a)
+  
+  bb.3.for.inc:
+    successors: %bb.1(0x80000000)
+    liveins: $rbp
+  
+    renamable $eax = MOV32rm $rbp, 1, $noreg, -4, $noreg, debug-location !33 :: (load (s32) from %ir.i)
+    renamable $eax = ADD32ri8 killed renamable $eax, 1, implicit-def dead $eflags, debug-location !33
+    MOV32mr $rbp, 1, $noreg, -4, $noreg, killed renamable $eax, debug-location !33 :: (store (s32) into %ir.i)
+    JMP_1 %bb.1, debug-location !34
+  
+  bb.4.for.end:
+    liveins: $rbp
+    
+    renamable $rax = MOVSX64rm32 $rbp, 1, $noreg, -8, $noreg, debug-location !39 :: (load (s32) from %ir.a)
+    MOV64mr $rbp, 1, $noreg, -16, $noreg, killed renamable $rax, debug-location !40 :: (store (s64) into %ir.t1.addr)
+    renamable $rax = MOV64rm $rbp, 1, $noreg, -16, $noreg, debug-location !41 :: (load (s64) from %ir.t1.addr)
+    renamable $eax = crash-start MOV32rm killed renamable $rax, 1, $noreg, 0, $noreg, debug-location !42 :: (load (s32) from %ir.5)
+    $rbp = frame-destroy POP64r implicit-def $rsp, implicit $rsp, debug-location !43
+    RET64 implicit $eax, debug-location !43
+
+...
+---
+name:            main
+alignment:       16
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHCatchret:   false
+hasEHScopes:     false
+hasEHFunclets:   false
+failsVerification: false
+tracksDebugUserValues: true
+registers:       []
+liveins:         []
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       24
+  offsetAdjustment: -24
+  maxAlignment:    4
+  adjustsStack:    true
+  hasCalls:        true
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 0
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+  - { id: 0, type: spill-slot, offset: -16, size: 8, alignment: 16, stack-id: default, 
+      callee-saved-register: '', callee-saved-restored: true, debug-info-variable: '', 
+      debug-info-expression: '', debug-info-location: '' }
+stack:
+  - { id: 0, name: retval, type: default, offset: -24, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 1, name: tmp, type: default, offset: -20, size: 4, alignment: 4, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '!47', debug-info-expression: '!DIExpression()', 
+      debug-info-location: '!48' }
+callSites:       []
+regInfo:         { GPRegs: 
+    - { reg: rax, value: '' }
+    - { reg: rbx, value: '0x0000000000000000' }
+    - { reg: rcx, value: '' }
+    - { reg: rdx, value: '' }
+    - { reg: rdi, value: '' }
+    - { reg: rsi, value: '' }
+    - { reg: rbp, value: '0x00007ffe019e20b0' }
+    - { reg: rsp, value: '0x00007ffe019e20a0' }
+    - { reg: r8, value: '' }
+    - { reg: r9, value: '' }
+    - { reg: r10, value: '' }
+    - { reg: r11, value: '' }
+    - { reg: r12, value: '0x00007ffe019e21c8' }
+    - { reg: r13, value: '0x000055d0af8dd170' }
+    - { reg: r14, value: '0x000055d0af8dfe20' }
+    - { reg: r15, value: '0x00007f40f6949040' }
+    - { reg: rip, value: '0x000055d0af8dd18f' }
+    - { reg: rflags, value: '' }
+    - { reg: cs, value: '' }
+    - { reg: fs, value: '' }
+    - { reg: gs, value: '' }
+    - { reg: ss, value: '' }
+    - { reg: ds, value: '' }
+    - { reg: es, value: '' }
+    - { reg: eax, value: '' }
+    - { reg: ebx, value: '' }
+    - { reg: ecx, value: '' }
+    - { reg: edx, value: '' }
+    - { reg: edi, value: '' }
+    - { reg: esi, value: '' }
+    - { reg: ebp, value: '' }
+    - { reg: esp, value: '' }
+    - { reg: r8d, value: '' }
+    - { reg: r9d, value: '' }
+    - { reg: r10d, value: '' }
+    - { reg: r11d, value: '' }
+    - { reg: r12d, value: '' }
+    - { reg: r13d, value: '' }
+    - { reg: r14d, value: '' }
+    - { reg: r15d, value: '' }
+    - { reg: ax, value: '' }
+    - { reg: bx, value: '' }
+    - { reg: cx, value: '' }
+    - { reg: dx, value: '' }
+    - { reg: di, value: '' }
+    - { reg: si, value: '' }
+    - { reg: bp, value: '' }
+    - { reg: sp, value: '' }
+    - { reg: r8w, value: '' }
+    - { reg: r9w, value: '' }
+    - { reg: r10w, value: '' }
+    - { reg: r11w, value: '' }
+    - { reg: r12w, value: '' }
+    - { reg: r13w, value: '' }
+    - { reg: r14w, value: '' }
+    - { reg: r15w, value: '' }
+    - { reg: ah, value: '' }
+    - { reg: bh, value: '' }
+    - { reg: ch, value: '' }
+    - { reg: dh, value: '' }
+    - { reg: al, value: '' }
+    - { reg: bl, value: '' }
+    - { reg: cl, value: '' }
+    - { reg: dl, value: '' }
+    - { reg: dil, value: '' }
+    - { reg: sil, value: '' }
+    - { reg: bpl, value: '' }
+    - { reg: spl, value: '' }
+    - { reg: r8l, value: '' }
+    - { reg: r9l, value: '' }
+    - { reg: r10l, value: '' }
+    - { reg: r11l, value: '' }
+    - { reg: r12l, value: '' }
+    - { reg: r13l, value: '' }
+    - { reg: r14l, value: '' }
+    - { reg: r15l, value: '' } }
+regInfo:         { GPRegs: [] }
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo: {}
+crashOrder:      2
+body:             |
+  bb.0.entry:
+    liveins: $rbp
+    
+    frame-setup PUSH64r killed $rbp, implicit-def $rsp, implicit $rsp
+    $rbp = frame-setup MOV64rr $rsp
+    $rsp = frame-setup SUB64ri8 $rsp, 16, implicit-def dead $eflags
+    MOV32mi $rbp, 1, $noreg, -8, $noreg, 0 :: (store (s32) into %ir.retval)
+    MOV32mi $rbp, 1, $noreg, -4, $noreg, 0, debug-location !48 :: (store (s32) into %ir.tmp)
+    renamable $rdi = LEA64r $rbp, 1, $noreg, -4, $noreg, debug-location !49
+    CALL64pcrel32 @fn, csr_64, implicit $rsp, implicit $ssp, implicit $rdi, implicit-def $eax, debug-location !49
+    $rsp = crash-start frame-destroy ADD64ri8 $rsp, 16, implicit-def dead $eflags, debug-location !50
+    $rbp = frame-destroy POP64r implicit-def $rsp, implicit $rsp, debug-location !50
+    RET64 implicit $eax, debug-location !50
+
+...
