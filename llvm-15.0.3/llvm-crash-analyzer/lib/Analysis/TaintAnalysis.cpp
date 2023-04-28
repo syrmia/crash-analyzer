@@ -16,6 +16,7 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/Debug.h"
 #include <sstream>
+#include <deque>
 
 static constexpr unsigned FrameLevelDepthToGo = 10;
 static bool abortAnalysis = false;
@@ -1000,6 +1001,24 @@ RegisterEquivalence *crash_analyzer::TaintAnalysis::getREAnalysis() {
   return REA;
 }
 
+static MachineInstr* getCrashStartMI(const MachineFunction &MF){
+  for (auto &MBB : MF) {
+    for (auto MIIt = MBB.rbegin(); MIIt != MBB.rend(); ++MIIt) {
+      auto &MI = *MIIt;
+      if (MI.getFlag(MachineInstr::CrashStart)) {
+        return (MachineInstr*) &MI;
+      }
+    }
+  }
+  return nullptr;
+}
+
+struct TaintAnalysisQueueElem {
+  MachineBasicBlock* MBB;
+  SmallVector<MachineBasicBlock*, 8> Successors;
+  TaintAnalysisQueueElem(MachineBasicBlock* MBB) : MBB(MBB) {}
+};
+
 // Return true if taint is terminated.
 // Return false otherwise.
 bool crash_analyzer::TaintAnalysis::runOnBlameMF(
@@ -1040,18 +1059,38 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
 
   auto TII = MF.getSubtarget().getInstrInfo();
 
-  // Perform backward analysis on the MF.
+  auto CrashStartInstr = getCrashStartMI(MF);
 
-  for (auto MBBIt = po_begin(&MF.front()), MBBIt_E = po_end(&MF.front());
-       MBBIt != MBBIt_E; ++MBBIt) {
-    auto MBB = *MBBIt;
+  std::deque<TaintAnalysisQueueElem> QueueMbb;
+
+  if(CrashStartInstr != nullptr){
+    TaintAnalysisQueueElem QueueElem(CrashStartInstr->getParent());
+    QueueMbb.push_back(QueueElem);
+  }
+
+  // Perform backward analysis on the MF.
+  
+  while(!QueueMbb.empty()) {
+    auto QueueElem = QueueMbb.front();
+    auto MBB = QueueElem.MBB;
+    QueueMbb.pop_front();
     SmallVector<TaintInfo, 8> &TL_Mbb = MBB_TL_Map.find(MBB)->second;
     CurTL = &TL_Mbb;
 
+    SmallVector<TaintInfo, 8> Old_TL_Mbb = TL_Mbb;
+
+    TL_Mbb.clear();
+
     // Initialize Taint list for a MBB
     if (CrashSequenceStarted) {
-      for (const MachineBasicBlock *Succ : MBB->successors()) {
-        mergeTaintList(TL_Mbb, MBB_TL_Map.find(Succ)->second);
+      for(auto MbbIt = QueueElem.Successors.begin(), MbbItEnd = QueueElem.Successors.end(); MbbIt != MbbItEnd; MbbIt++){
+        auto& SuccTl = MBB_TL_Map.find(*MbbIt)->second;
+        for (auto TlIt = SuccTl.begin(), TlItEnd = SuccTl.end(); TlIt != TlItEnd; TlIt++) {
+          // Add TaintInfo to Dest if already not present
+          if (isTainted(*TlIt, Old_TL_Mbb).Op == nullptr && isTainted(*TlIt, TL_Mbb).Op == nullptr)
+            addToTaintList(*TlIt, TL_Mbb);
+          printTaintList(TL_Mbb);
+        }
       }
       // If Taint List for an MBB is empty, then no need to analyze this MBB
       printTaintList(TL_Mbb);
@@ -1253,7 +1292,25 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
       if (!TaintResult)
         Result = true;
     }
+    if(TL_Mbb != Old_TL_Mbb){
+      for(auto MBBPred : MBB->predecessors()){
+        bool contains = false;
+        for(auto QueueIt = QueueMbb.begin(); QueueIt != QueueMbb.end(); QueueIt++){
+          if(QueueIt->MBB == MBBPred){
+            contains = true;
+            QueueIt->Successors.push_back(MBB);
+            break;
+          }
+        }
+        if(!contains){
+          TaintAnalysisQueueElem QueueElem(MBBPred);
+          QueueElem.Successors.push_back(MBB);
+          QueueMbb.push_back(QueueElem);
+        }
+      }
+    }
   }
+  CurTL = &MBB_TL_Map.find(&*MF.begin())->second;
   resetTaintList(*CurTL);
   setREAnalysis(nullptr);
   setCRE(nullptr);

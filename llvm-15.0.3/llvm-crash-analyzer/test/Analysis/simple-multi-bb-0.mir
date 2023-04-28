@@ -197,13 +197,13 @@ body:             |
     JCC_4 %bb.4, 14, implicit $eflags, debug-location !DILocation(line: 7, column: 12, scope: !2)
   
   bb.3:
-    successors: %bb.4(0x80000000)
+    successors: %bb.5(0x80000000)
     liveins: $rbp
   
     $eax = MOV32rm $rbp, 1, $noreg, -12, $noreg, debug-location !DILocation(line: 8, column: 5, scope: !2)
     $eax = ADD32ri8 $eax, -1, implicit-def $eflags, debug-location !DILocation(line: 8, column: 5, scope: !2)
     MOV32mr $rbp, 1, $noreg, -12, $noreg, $eax, debug-location !DILocation(line: 8, column: 5, scope: !2)
-    JMP_4 %bb.4, debug-location !DILocation(line: 8, column: 5, scope: !2)
+    JMP_4 %bb.5, debug-location !DILocation(line: 8, column: 5, scope: !2)
   
   bb.4:
     successors: %bb.5(0x80000000)

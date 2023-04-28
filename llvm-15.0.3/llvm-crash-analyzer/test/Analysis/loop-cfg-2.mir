@@ -46,16 +46,31 @@
 # CHECK: Add to TL: {reg:$rbp; off:-12}
 # CHECK: Remove from TL: {reg:$rax}
 
-## BB.1's taint list is empty. If the block BB.3 were analyzed after BB.2 and before BB.1, the taint list of BB.1 wouldn't be empty and the blame instruction would be found.
-# CHECK: Taint List is empty
+## BB.3
+# CHECK: CMP32mi8 $rbp, 1, $noreg, -16, $noreg, 4, implicit-def $eflags
+
+## BB.1
+# CHECK: MOV32mr $rbp, 1, $noreg, -16, $noreg, $eax
+# CHECK: $eax = ADD32ri8 $eax(tied-def 0), 1, implicit-def $eflags
+# CHECK: $eax = MOV32rm $rbp, 1, $noreg, -16, $noreg
+
+# CHECK: MOV32mr $rbp, 1, $noreg, -12, $noreg, $eax
+# CHECK: Add to TL: {reg:$eax}
+# CHECK: Remove from TL: {reg:$rbp; off:-12}
+
+# CHECK: $eax = MOV32rm $rbp, 1, $noreg, -16, $noreg
+# CHECK: Add to TL: {reg:$rbp; off:-16}
+# CHECK: Remove from TL: {reg:$eax}
 
 ## BB.3
 # CHECK: CMP32mi8 $rbp, 1, $noreg, -16, $noreg, 4, implicit-def $eflags
 
 ## BB.0
 # CHECK: MOV32mi $rbp, 1, $noreg, -16, $noreg, 0
+# CHECK: Remove from TL: {reg:$rbp; off:-16}
+# CHECK: Taint List is empty
 
-# CHECK: MF: main
+
 # CHECK: Blame Function is fn
 
 

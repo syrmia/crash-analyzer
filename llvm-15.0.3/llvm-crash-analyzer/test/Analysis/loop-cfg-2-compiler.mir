@@ -44,20 +44,33 @@
 # CHECK: Add to TL: {reg:$rbp; off:-8}
 # CHECK: Remove from TL: {reg:killed renamable $rax}
 
-## BB.3's and BB.2's taint lists are empty. If the block BB.1 were analyzed after BB.4 and before BB.3 and if BB.3 were analyzed before BB.2, the taint lists of BB.3 and BB.2 wouldn't be empty and the blame instruction would be found.
-# CHECK: Taint List is empty
-# CHECK: Taint List is empty
+## BB.1
+# CHECK: CMP32mi8 $rbp, 1, $noreg, -4, $noreg, 4, implicit-def $eflags
+
+## BB.3
+# CHECK: MOV32mr $rbp, 1, $noreg, -4, $noreg
+# CHECK: renamable $eax = ADD32ri8 killed renamable $eax(tied-def 0), 1, implicit-def dead $eflags
+# CHECK: renamable $eax = MOV32rm $rbp, 1, $noreg, -4, $noreg
+
+## BB.2
+# CHECK: MOV32mr $rbp, 1, $noreg, -8, $noreg, killed renamable $eax
+# CHECK: Add to TL: {reg:killed renamable $eax}
+# CHECK: Remove from TL: {reg:$rbp; off:-8}
+
+# CHECK: renamable $eax = MOV32rm $rbp, 1, $noreg, -4, $noreg
+# CHECK: Add to TL: {reg:$rbp; off:-4}
+# CHECK: Remove from TL: {reg:killed renamable $eax}
 
 ## BB.1
 # CHECK: CMP32mi8 $rbp, 1, $noreg, -4, $noreg, 4, implicit-def $eflags
 
 ## BB.0
 # CHECK: MOV32mi $rbp, 1, $noreg, -4, $noreg, 0
+# CHECK: Remove from TL: {reg:$rbp; off:-4}
+# CHECK: Taint List is empty
 
-# CHECK: MF: main
 
-## This is a wrong conclusion.
-# CHECK: Blame Function is main
+# CHECK: Blame Function is fn
 
 
 ## Below is a content of the file test.mir. I changed the attributes crashOrder and regInfo, added flag crash-start, updated liveins and removed CFI_INSTRUCTIONs.

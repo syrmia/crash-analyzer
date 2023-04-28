@@ -45,9 +45,6 @@
 # CHECK: Add to TL: {reg:$rbp; off:-16}
 # CHECK: Remove from TL: {reg:$rax}
 
-## BB.2 hasn't successors, so its taint list is empty.
-# CHECK: Taint List is empty
-
 ## BB.3
 # CHECK: CMP32mi8 $rbp, 1, $noreg, -16, $noreg, 4, implicit-def $eflags
 
