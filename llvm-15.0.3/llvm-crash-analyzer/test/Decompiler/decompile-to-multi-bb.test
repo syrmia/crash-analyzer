@@ -31,16 +31,18 @@
 # CHECK:  successors: %bb.1(0x40000000), %bb.2(0x40000000)
 # CHECK:  JCC_4 %bb.2, 13, implicit $eflags
 # CHECK:  bb.1:
-# CHECK:  successors: %bb.5(0x80000000)
-# CHECK:  JMP_4 %bb.5
+# CHECK:  successors: %bb.6(0x80000000)
+# CHECK:  JMP_4 %bb.6
 # CHECK:  bb.2:
 # CHECK:  successors: %bb.3(0x40000000), %bb.4(0x40000000)
 # CHECK:  JCC_4 %bb.4, 14, implicit $eflags
 # CHECK:  bb.3:
-# CHECK:  successors: %bb.4(0x80000000)
-# CHECK:  JMP_4 %bb.4
-# CHECK:  bb.4:
 # CHECK:  successors: %bb.5(0x80000000)
 # CHECK:  JMP_4 %bb.5
+# CHECK:  bb.4:
+# CHECK:  successors: %bb.5(0x80000000)
 # CHECK:  bb.5:
+# CHECK:  successors: %bb.6(0x80000000)
+# CHECK:  JMP_4 %bb.6
+# CHECK:  bb.6:
 # CHECK:  RET64

@@ -400,13 +400,13 @@ bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
 
     // Fill the Machine Function.
     if (MF) {
-      // If it is not a branch and we previously did not decompile a
-      // branch,
-      // check if this should start a new basic block. For example
-      // default:
-      // label within a switch usually has this structure.
-      if (!MCID.isBranch() && BranchesToUpdate.count(Addr.Address) &&
-          !PrevBranch) {
+      // If an address of a current instruction (Addr.Address) is the
+      // destination of some branch that was decompiled, we create a new
+      // basic block. For example, a default label within a switch usually
+      // has this structure. If a branch was previously decompiled (PrevBranch
+      // == true), the new basic block was already created (look at the code
+      // below).
+      if (BranchesToUpdate.count(Addr.Address) && !PrevBranch) {
         MachineBasicBlock *OldBB = MBB;
         MBB = MF->CreateMachineBasicBlock();
         if (!OldBB->isSuccessor(MBB))
