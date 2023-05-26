@@ -37,7 +37,7 @@ void RegisterEquivalence::join(MachineBasicBlock &MBB, RegisterEqSet &LiveIns) {
     LLVM_DEBUG(llvm::dbgs() << "pred bb." << PredBlock->getNumber() << ":\n");
     LLVM_DEBUG(dumpRegTable(LiveOuts[PredBlock->getNumber()]));
     for (auto &regs : LiveOuts[PredBlock->getNumber()]) {
-      RegisterOffsetPair reg{regs.first.RegNum};
+      RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset, regs.first.IsDeref};
       std::set_union(LiveIns[reg].begin(), LiveIns[reg].end(),
                      LiveOuts[PredBlock->getNumber()][reg].begin(),
                      LiveOuts[PredBlock->getNumber()][reg].end(),
@@ -320,23 +320,24 @@ void RegisterEquivalence::registerEqDFAnalysis(MachineFunction &MF) {
   for (auto *MBB : RPOT) {
     RegisterEqSet LiveIns;
     join(*MBB, LiveIns);
-    RegisterEqSet PrevRegSet;
+    // At the beginning, the previous register equivalence set equals live register equivalence set.
+    RegisterEqSet PrevRegSet = LiveIns;
     for (auto &MI : *MBB) {
       if (&MI == &*MBB->begin()) {
-        PrevRegSet = LiveIns;
-        LLVM_DEBUG(dumpRegTable(LiveIns));
-      } else {
-        RegInfo[&MI] = PrevRegSet;
+        LLVM_DEBUG(dumpRegTable(PrevRegSet));
       }
+      // A register equivalence set of a current instruction equals previously calculated register equivalence set.
+      RegInfo[&MI] = PrevRegSet;
 
       // Process different types of MIs.
       processMI(MI);
 
-      // Handle inst impact onto reg table.
+      // Handle instruction impact onto register equivalence table.
       PrevRegSet = RegInfo[&MI];
       LLVM_DEBUG(dumpRegTableAfterMI(&MI));
     }
-    LiveOuts[MBB->getNumber()] = LiveIns;
+    // The live register equivalence set of a basic block equals a lastly calculated register equivalence set.
+    LiveOuts[MBB->getNumber()] = PrevRegSet;
   }
 }
 
