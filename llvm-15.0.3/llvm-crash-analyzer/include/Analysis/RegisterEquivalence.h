@@ -69,12 +69,13 @@ class RegisterEquivalence {
 
   RegEqInfoPerMI RegInfo;
 
-  // Maps MBB num into regs.
-  std::unordered_map<unsigned, RegisterEqSet> LiveOuts;
+  // This maps a MBB number into an equivalent locations set after the execution
+  // of that MBB.
+  std::unordered_map<unsigned, RegisterEqSet> EqLocAfterMBB;
 
-  // This maps a number of a machine basic block into a set of equivalent
-  // locations that are live before that block.
-  std::unordered_map<unsigned, RegisterEqSet> LiveInsMap;
+  // This maps a MBB number into an equivalent locations set before the
+  // execution of that MBB.
+  std::unordered_map<unsigned, RegisterEqSet> EqLocBeforeMBB;
 
 public:
   void dumpRegTableAfterMI(MachineInstr *MI);
@@ -110,8 +111,9 @@ public:
   // confirm that that is done for all sub/super registers as well.
   bool verifyOverlapsInvalidation(MachineInstr &MI, unsigned RegNum);
 
-  void join(MachineBasicBlock &MBB, RegisterEqSet &LiveIns);
-  void analyzeMachineBasicBlock(RegisterEqSet &LiveIns, MachineBasicBlock *MBB);
+  void join(MachineBasicBlock &MBB, RegisterEqSet &EqLocBeforeCurrMBB);
+  void analyzeMachineBasicBlock(RegisterEqSet &EqLocBeforeCurrMBB,
+                                MachineBasicBlock *MBB);
   void registerEqDFAnalysis(MachineFunction &MF);
   void init(MachineFunction &MF);
   bool run(MachineFunction &MF);
