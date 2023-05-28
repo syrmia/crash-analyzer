@@ -11,6 +11,8 @@
 #include "llvm/ADT/PostOrderIterator.h"
 
 #include <algorithm>
+#include <deque>
+#include <set>
 
 #define DEBUG_TYPE "register-eq"
 
@@ -22,28 +24,70 @@ void RegisterEquivalence::init(MachineFunction &MF) {
 void RegisterEquivalence::join(MachineBasicBlock &MBB, RegisterEqSet &LiveIns) {
   LLVM_DEBUG(llvm::dbgs() << "** join for bb." << MBB.getNumber() << "\n");
 
-  // This is entry BB.
-  if (MBB.getNumber() == 0) {
-    for (const MachineBasicBlock::RegisterMaskPair &LI : MBB.liveins()) {
-      RegisterOffsetPair reg{LI.PhysReg};
-      LiveIns[reg].insert(reg);
-    }
-    return;
-  }
+  // An indicator whether any predecessor was processed.
+  bool PredecessorProcessed = false;
 
   SmallVector<MachineBasicBlock *, 8> Predecessors(MBB.pred_begin(),
                                                    MBB.pred_end());
   for (auto *PredBlock : Predecessors) {
+    // If a predecessor hasn't been analyzed, skip it.
+    auto LiveOutsIter = LiveOuts.find(PredBlock->getNumber());
+    if (LiveOutsIter == LiveOuts.end()) {
+      continue;
+    }
+    auto &PredLiveOuts = LiveOutsIter->second;
     LLVM_DEBUG(llvm::dbgs() << "pred bb." << PredBlock->getNumber() << ":\n");
-    LLVM_DEBUG(dumpRegTable(LiveOuts[PredBlock->getNumber()]));
-    for (auto &regs : LiveOuts[PredBlock->getNumber()]) {
-      RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset, regs.first.IsDeref};
-      std::set_union(LiveIns[reg].begin(), LiveIns[reg].end(),
-                     LiveOuts[PredBlock->getNumber()][reg].begin(),
-                     LiveOuts[PredBlock->getNumber()][reg].end(),
-                     std::inserter(LiveIns[reg], LiveIns[reg].begin()));
+    LLVM_DEBUG(dumpRegTable(PredLiveOuts));
+
+    // If no predecessor has been processed, just copy the set of equivalent
+    // locations from a predecessor.
+    if (!PredecessorProcessed) {
+      LiveIns = PredLiveOuts;
+      PredecessorProcessed = true;
+    } else {
+      // Go through all pairs of a location and a set of its equivalent
+      // locations. Intersect the sets of the equivalent locations for a given
+      // location, considering that any of the predecessors could be executed in
+      // the runtime. During reverse execution it is generally unknown which
+      // block was really a predecessor and that's why it is used intersection.
+      // Discard empty sets.
+      for (auto &regs : PredLiveOuts) {
+        RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset,
+                               regs.first.IsDeref};
+        if (LiveIns.find(reg) != LiveIns.end()) {
+          std::set<RegisterOffsetPair> NewSet;
+          std::set_intersection(LiveIns[reg].begin(), LiveIns[reg].end(),
+                                PredLiveOuts[reg].begin(),
+                                PredLiveOuts[reg].end(),
+                                std::inserter(NewSet, NewSet.begin()));
+          if (NewSet.size() == 0) {
+            LiveIns.erase(reg);
+          } else {
+            LiveIns[reg] = NewSet;
+          }
+        }
+      }
+      for (auto &regs : make_early_inc_range(LiveIns)) {
+        RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset,
+                               regs.first.IsDeref};
+        if (PredLiveOuts.find(reg) != PredLiveOuts.end()) {
+          std::set<RegisterOffsetPair> NewSet;
+          std::set_intersection(LiveIns[reg].begin(), LiveIns[reg].end(),
+                                PredLiveOuts[reg].begin(),
+                                PredLiveOuts[reg].end(),
+                                std::inserter(NewSet, NewSet.begin()));
+          if (NewSet.size() == 0) {
+            LiveIns.erase(reg);
+          } else {
+            LiveIns[reg] = NewSet;
+          }
+        } else {
+          LiveIns.erase(reg);
+        }
+      }
     }
   }
+  LLVM_DEBUG(dumpRegTable(LiveIns));
 }
 
 void RegisterEquivalence::dumpRegTableAfterMI(MachineInstr *MI) {
@@ -315,29 +359,102 @@ void RegisterEquivalence::processMI(MachineInstr &MI) {
     return;
 }
 
+void RegisterEquivalence::analyzeMachineBasicBlock(RegisterEqSet &LiveIns,
+                                                   MachineBasicBlock *MBB) {
+  // At the beginning, the previous register equivalence set equals the set of
+  // locations that are live before a basic block.
+  RegisterEqSet PrevRegSet = LiveIns;
+
+  // Analyze the instructions of the basic block and update an equivalent
+  // locations set.
+  for (auto &MI : *MBB) {
+    // A register equivalence set before executing a current instruction equals
+    // previously calculated register equivalence set.
+    RegInfo[&MI] = PrevRegSet;
+
+    // Process different types of MIs.
+    processMI(MI);
+
+    // Handle instruction impact onto register equivalence table.
+    PrevRegSet = RegInfo[&MI];
+    LLVM_DEBUG(dumpRegTableAfterMI(&MI));
+  }
+
+  // The set of equivalent locations that are live after the basic block equals
+  // a lastly calculated register equivalence set.
+  LiveOuts[MBB->getNumber()] = PrevRegSet;
+
+  auto &LiveOutsForMBB = LiveOuts[MBB->getNumber()];
+
+  // Identities are redundant in a sense of necessary information for equivalent
+  // locations, so they and empty sets are discarded.
+  for (auto &regs : make_early_inc_range(LiveOutsForMBB)) {
+    RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset,
+                           regs.first.IsDeref};
+    LiveOutsForMBB[reg].erase(reg);
+    if (LiveOutsForMBB[reg].size() == 0) {
+      LiveOutsForMBB.erase(reg);
+    }
+  }
+}
+
 void RegisterEquivalence::registerEqDFAnalysis(MachineFunction &MF) {
-  ReversePostOrderTraversal<MachineFunction *> RPOT(&MF);
-  for (auto *MBB : RPOT) {
+  // A queue that determines a basic blocks processing order during the
+  // equivalent locations analysis.
+  std::deque<MachineBasicBlock *> QueueMbb;
+
+  // If a machine function contains at least one basic block, put the entry
+  // block into the queue.
+  if (MF.begin() != MF.end()) {
+    QueueMbb.push_back(&*MF.begin());
+  }
+
+  // While the queue is not empty, process a basic block from the beginning of
+  // the queue.
+  while (!QueueMbb.empty()) {
+    auto *MBB = QueueMbb.front();
+    QueueMbb.pop_front();
+
+    // An indicator whether the basic block was analyzed.
+    bool BlockAnalyzed = LiveOuts.find(MBB->getNumber()) != LiveOuts.end();
+
+    // An old set of equivalent locations after the last instruction of the
+    // basic block.
+    auto OldLiveOut = LiveOuts[MBB->getNumber()];
+
+    // Merge equivalent locations live after predecessors in order to get
+    // equivalent locations live before the basic block.
     RegisterEqSet LiveIns;
     join(*MBB, LiveIns);
-    // At the beginning, the previous register equivalence set equals live register equivalence set.
-    RegisterEqSet PrevRegSet = LiveIns;
-    for (auto &MI : *MBB) {
-      if (&MI == &*MBB->begin()) {
-        LLVM_DEBUG(dumpRegTable(PrevRegSet));
-      }
-      // A register equivalence set of a current instruction equals previously calculated register equivalence set.
-      RegInfo[&MI] = PrevRegSet;
+    auto OldLiveIns = LiveInsMap[MBB->getNumber()];
+    LiveInsMap[MBB->getNumber()] = LiveIns;
 
-      // Process different types of MIs.
-      processMI(MI);
-
-      // Handle instruction impact onto register equivalence table.
-      PrevRegSet = RegInfo[&MI];
-      LLVM_DEBUG(dumpRegTableAfterMI(&MI));
+    // There is no need to analyze the block if its set of equivalent locations
+    // that are live before the basic block didn't change.
+    if (!BlockAnalyzed || LiveIns != OldLiveIns) {
+      analyzeMachineBasicBlock(LiveIns, MBB);
     }
-    // The live register equivalence set of a basic block equals a lastly calculated register equivalence set.
-    LiveOuts[MBB->getNumber()] = PrevRegSet;
+
+    // Check whether the successors need to be analyzed.
+    for (auto *Successor : MBB->successors()) {
+      // If a successor wasn't analyzed or the set of equivalent locations that
+      // are live after the current basic block changed, put a successor into
+      // the queue if it hasn't been put.
+      if (LiveOuts.find(Successor->getNumber()) == LiveOuts.end() ||
+          !BlockAnalyzed || OldLiveOut != LiveOuts[MBB->getNumber()]) {
+        bool Contains = false;
+        for (auto QueueIt = QueueMbb.begin(), QueueItEnd = QueueMbb.end();
+             QueueIt != QueueItEnd; QueueIt++) {
+          if (*QueueIt == Successor) {
+            Contains = true;
+            break;
+          }
+        }
+        if (!Contains) {
+          QueueMbb.push_back(Successor);
+        }
+      }
+    }
   }
 }
 
