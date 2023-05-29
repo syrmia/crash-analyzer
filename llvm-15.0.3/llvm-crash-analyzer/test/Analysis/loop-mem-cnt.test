@@ -212,6 +212,7 @@ body:             |
     liveins: $rbp
   
     $rax = MOVSX64rm32 $rbp, 1, $noreg, -36, $noreg, debug-location !DILocation(line: 6, column: 7, scope: !2)
+  ; Here it should be checked whether a taint list contains a pair of a register $rbp and an offset -32 + rax * 8.
     MOV64mi32 $rbp, 8, $rax, -32, $noreg, 0, debug-location !DILocation(line: 6, column: 12, scope: !2)
   
   bb.3:
@@ -225,6 +226,7 @@ body:             |
   
     $eax = MOV32rm $rbp, 1, $noreg, -36, $noreg, debug-location !DILocation(line: 4, column: 22, scope: !2)
     $eax = ADD32ri8 $eax, 1, implicit-def $eflags, debug-location !DILocation(line: 4, column: 22, scope: !2)
+  ; Here it must be implemented a transfer of a value at an address $rbp-36 to a register $eax.
     MOV32mr $rbp, 1, $noreg, -36, $noreg, $eax, debug-location !DILocation(line: 4, column: 22, scope: !2)
     JMP_4 %bb.6, debug-location !DILocation(line: 4, column: 3, scope: !2)
   
