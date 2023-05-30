@@ -235,6 +235,13 @@ void crash_analyzer::TaintAnalysis::calculateMemAddr(TaintInfo &Ti) {
   const MachineFunction *MF = MI->getMF();
   auto TRI = MF->getSubtarget().getRegisterInfo();
   std::string RegName = TRI->getRegAsmName(Ti.Op->getReg()).lower();
+  /*std::string IndexRegName;
+  if(Ti.IndexReg != nullptr && Ti.IndexReg->isReg()){
+    auto IndexReg = Ti.IndexReg->getReg();
+    if(IndexReg != 0){
+      IndexRegName = TRI->getRegAsmName(IndexReg).lower();
+    }
+  }*/
 
   Ti.IsConcreteMemory = true;
 
@@ -252,6 +259,10 @@ void crash_analyzer::TaintAnalysis::calculateMemAddr(TaintInfo &Ti) {
   // Calculate real address by reading the context of regInfo MF attr
   // (read from corefile).
   std::string RegValue = CurrentCRE->getCurretValueInReg(RegName);
+  /*std::string IndexRegValue;
+  if(IndexRegName.size() != 0){
+    IndexRegValue = CurrentCRE->getCurretValueInReg(IndexRegName);
+  }*/
   auto CATI = getCATargetInfoInstance();
   if (RegValue == "") {
     if (!MI) {
@@ -316,6 +327,70 @@ void crash_analyzer::TaintAnalysis::calculateMemAddr(TaintInfo &Ti) {
     return;
   }
 
+  /*if (IndexRegName.size() != 0 && IndexRegValue == "") {
+    if (!MI) {
+      Ti.IsConcreteMemory = false;
+      return;
+    }
+    // Try to see if there is an equal register that could be used here.
+    auto MII = MachineBasicBlock::iterator(const_cast<MachineInstr *>(MI));
+    if (MII != MI->getParent()->begin()) {
+      if (!REA) {
+        Ti.IsConcreteMemory = false;
+        return;
+      }
+
+      // We try to see what was reg eq. status before the MI.
+      MII = std::prev(MII);
+      auto EqRegs = REA->getEqRegsAfterMI(const_cast<MachineInstr *>(&*MII),
+                                          (unsigned)Ti.IndexReg->getReg());
+      if (EqRegs.size() == 0) {
+        Ti.IsConcreteMemory = false;
+        return;
+      }
+
+      for (auto &eqR : EqRegs) {
+        uint64_t AddrValue = 0;
+        uint64_t Val = 0;
+        // Read (base) register value, if it is not $noreg.
+        if (eqR.RegNum != 0) {
+          std::string rName = TRI->getRegAsmName(eqR.RegNum).lower();
+          std::string rValue = CurrentCRE->getCurretValueInReg(rName);
+          if (rValue == "")
+            continue;
+
+          std::istringstream converter(rValue);
+          converter >> std::hex >> AddrValue;
+          // If the base register is PC, use address (PC value) of the next MI.
+          if (CATI->isPCRegister(IndexRegName)) {
+            if (!CATI->getInstAddr(MI))
+              continue;
+            AddrValue = *CATI->getInstAddr(MI) + *CATI->getInstSize(MI);
+          }
+          Val = AddrValue;
+        }
+        // If eqR is register location just add the offset to it, if it is a
+        // dereferenced memory location, read the value from memory and add
+        // the offset.
+        if (eqR.IsDeref) {
+          AddrValue += eqR.Offset;
+          if (!Dec || !Dec->getTarget())
+            break;
+          lldb::SBError err;
+          Val = Dec->getTarget()->GetProcess().ReadUnsignedFromMemory(AddrValue,
+                                                                      8, err);
+        }
+        std::ostringstream StrVal;
+        StrVal << std::hex << Val;
+        IndexRegValue = StrVal.str();
+        break;
+      }
+    }else{
+      Ti.IsConcreteMemory = false;
+      return;
+    }
+  }*/
+
   // Convert the std::string hex number into uint64_t.
   uint64_t RealAddr = 0;
   std::stringstream SS;
@@ -332,6 +407,24 @@ void crash_analyzer::TaintAnalysis::calculateMemAddr(TaintInfo &Ti) {
 
   // Apply the offset.
   RealAddr += *Ti.Offset;
+  /*if(IndexRegValue.size() != 0){
+    uint64_t IndexRegValueNumber;
+    std::stringstream SS;
+    SS << std::hex << IndexRegValue;
+    SS >> IndexRegValueNumber;
+    if(CATI->isPCRegister(IndexRegName)){
+      if(!MI || !CATI->getInstAddr(MI)){
+        Ti.IsConcreteMemory = false;
+        return;
+      }
+      IndexRegValueNumber = *CATI->getInstAddr(MI) + *CATI->getInstSize(MI);
+    }
+    int64_t ScaleNumber = 1;
+    if(Ti.Scale != nullptr && Ti.Scale->isImm()){
+      ScaleNumber = Ti.Scale->getImm();
+    }
+    RealAddr += IndexRegValueNumber * ScaleNumber;
+  }*/
 
   Ti.ConcreteMemoryAddress = RealAddr;
 }
@@ -540,6 +633,12 @@ void crash_analyzer::TaintAnalysis::printDestSrcInfo(DestSourcePair &DestSrc,
                  << printReg(DestSrc.Destination->getReg(), TRI);
     if (DestSrc.DestOffset)
       llvm::dbgs() << "; off:" << DestSrc.DestOffset;
+    if (DestSrc.DestIndexReg != nullptr && DestSrc.DestIndexReg->isReg()) {
+      llvm::dbgs() << "; idx:" << printReg(DestSrc.DestIndexReg->getReg(), TRI);
+    }
+    if (DestSrc.DestScale != nullptr && DestSrc.DestScale->isImm()) {
+      llvm::dbgs() << "; scl:" << DestSrc.DestScale->getImm();
+    }
     llvm::dbgs() << "}\n";
   }
   if (DestSrc.Source) {
@@ -864,6 +963,8 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
 
   DestTi.Op = DS.Destination;
   DestTi.Offset = DS.DestOffset;
+  DestTi.Scale = DS.DestScale;
+  DestTi.IndexReg = DS.DestIndexReg;
   if (DestTi.Offset)
     calculateMemAddr(DestTi);
   handleGlobalVar(DestTi);

@@ -44,6 +44,8 @@ enum TaintInfoType { ImmediateVal, RegisterLoc, MemoryLoc };
 //   2) Scaled Index addressing mode
 struct TaintInfo {
   const MachineOperand *Op = nullptr;
+  MachineOperand *Scale = nullptr;
+  MachineOperand *IndexReg = nullptr;
 
   // For mem operands, we rather choose to taint
   // real/concrete addresses (by calculating base_reg + off).
