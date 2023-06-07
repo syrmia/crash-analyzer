@@ -232,6 +232,34 @@ bool RegisterEquivalence::applyRegisterCopy(MachineInstr &MI) {
   return true;
 }
 
+bool RegisterEquivalence::areAliases(Register Dst, Register Src) {
+  std::string DstRegName = TRI->getRegAsmName(Dst).lower();
+  std::string SrcRegName = TRI->getRegAsmName(Src).lower();
+  auto CATI = getCATargetInfoInstance();
+  auto DstRegInfoId = CATI->getID(DstRegName);
+  if (!DstRegInfoId) {
+  } else {
+    auto DstRegsTuple = CATI->getRegMap(*DstRegInfoId);
+    if (std::get<0>(DstRegsTuple) != DstRegName &&
+        std::get<0>(DstRegsTuple) == SrcRegName) {
+      return true;
+    }
+    if (std::get<1>(DstRegsTuple) != DstRegName &&
+        std::get<1>(DstRegsTuple) == SrcRegName) {
+      return true;
+    }
+    if (std::get<2>(DstRegsTuple) != DstRegName &&
+        std::get<2>(DstRegsTuple) == SrcRegName) {
+      return true;
+    }
+    if (std::get<3>(DstRegsTuple) != DstRegName &&
+        std::get<3>(DstRegsTuple) == SrcRegName) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
   if (!TII->isLoad(MI))
     return false;
@@ -265,7 +293,7 @@ bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
   invalidateAllRegUses(MI, Dest);
 
   // If SrcReg is redefined (same as DestReg), set only identity equivalence.
-  if (Src.RegNum == Dest.RegNum) {
+  if (Src.RegNum == Dest.RegNum || areAlias(DestReg, SrcReg)) {
     if (RegInfo[&MI][Dest].find(Src) == RegInfo[&MI][Dest].end())
       RegInfo[&MI][Src].insert(Src);
     return true;

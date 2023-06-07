@@ -77,6 +77,10 @@ class RegisterEquivalence {
   // execution of that MBB.
   std::unordered_map<unsigned, RegisterEqSet> EqLocBeforeMBB;
 
+  // Checks whether two registers are aliases.
+  // Returns true if source register is an alias to a destination register.
+  bool areAliases(Register Dst, Register Src);
+
 public:
   void dumpRegTableAfterMI(MachineInstr *MI);
   void dumpRegTable(RegisterEqSet &Regs);

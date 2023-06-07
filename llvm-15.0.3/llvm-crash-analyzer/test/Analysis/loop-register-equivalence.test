@@ -98,8 +98,6 @@
 
 # After processing block bb.2, the set of locations equal after it has been changed. The block bb.2 hasn't any successors.
 # CHECK: Reg Eq Table:
-# CHECK: $eax : { deref->$rax }
-# CHECK: deref->$rax : { $eax }
 
 # Process a block bb.3. Get the sets of locations equal after its processed predecessors, bb.0 and bb.1, and intersect them.
 # During TaintAnalysis it is unknown whether the predecessor was a bb.0 or a bb.1 and that's why the intersection is done instead of the union.
@@ -155,8 +153,6 @@
 # After processing block bb.2, the set of locations equal after it hasn't been changed. The queue is empty. The convergence is achieved due to the reduction of the sets
 # of the locations equal after the blocks and that's why there cannot exist infinite loops during register equivalence analysis.
 # CHECK: Reg Eq Table:
-# CHECK: $eax : { deref->$rax }
-# CHECK: deref->$rax : { $eax }
 
 
 
