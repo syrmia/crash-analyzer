@@ -240,19 +240,9 @@ bool RegisterEquivalence::areAliases(Register Dst, Register Src) {
   if (!DstRegInfoId) {
   } else {
     auto DstRegsTuple = CATI->getRegMap(*DstRegInfoId);
-    if (std::get<0>(DstRegsTuple) != DstRegName &&
-        std::get<0>(DstRegsTuple) == SrcRegName) {
-      return true;
-    }
-    if (std::get<1>(DstRegsTuple) != DstRegName &&
-        std::get<1>(DstRegsTuple) == SrcRegName) {
-      return true;
-    }
-    if (std::get<2>(DstRegsTuple) != DstRegName &&
-        std::get<2>(DstRegsTuple) == SrcRegName) {
-      return true;
-    }
-    if (std::get<3>(DstRegsTuple) != DstRegName &&
+    if (std::get<0>(DstRegsTuple) == SrcRegName ||
+        std::get<1>(DstRegsTuple) == SrcRegName ||
+        std::get<2>(DstRegsTuple) == SrcRegName ||
         std::get<3>(DstRegsTuple) == SrcRegName) {
       return true;
     }
@@ -293,7 +283,7 @@ bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
   invalidateAllRegUses(MI, Dest);
 
   // If SrcReg is redefined (same as DestReg), set only identity equivalence.
-  if (Src.RegNum == Dest.RegNum || areAlias(DestReg, SrcReg)) {
+  if (Src.RegNum == Dest.RegNum || areAliases(DestReg, SrcReg)) {
     if (RegInfo[&MI][Dest].find(Src) == RegInfo[&MI][Dest].end())
       RegInfo[&MI][Src].insert(Src);
     return true;
