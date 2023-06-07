@@ -397,6 +397,7 @@ void RegisterEquivalence::analyzeMachineBasicBlock(
       EqLocAfterCurrMBB.erase(reg);
     }
   }
+  LLVM_DEBUG(dumpRegTable(EqLocAfterCurrMBB));
 }
 
 void RegisterEquivalence::registerEqDFAnalysis(MachineFunction &MF) {

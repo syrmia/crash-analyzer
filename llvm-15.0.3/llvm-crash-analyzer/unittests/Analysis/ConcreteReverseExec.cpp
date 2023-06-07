@@ -241,6 +241,8 @@ body:             |
   ASSERT_TRUE(MF);
 
   ConcreteReverseExec ReverseExecutionRecord(MF);
+  MachineFunction::RegisterCrashInfo RegInfo = MF->getCrashRegInfo();
+  ReverseExecutionRecord.setCurrentRegisterValues(&RegInfo);
   bool CrashSequenceStarted = false;
 
   auto TRI = MF->getSubtarget().getRegisterInfo();
