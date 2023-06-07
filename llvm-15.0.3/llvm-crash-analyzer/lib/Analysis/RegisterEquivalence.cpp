@@ -52,38 +52,38 @@ void RegisterEquivalence::join(MachineBasicBlock &MBB,
       // the runtime. During reverse execution it is generally unknown which
       // block was really a predecessor and that's why it is used intersection.
       // Discard empty sets.
-      for (auto &regs : EqLocAfterPred) {
-        RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset,
-                               regs.first.IsDeref};
-        if (EqLocBeforeCurrMBB.find(reg) != EqLocBeforeCurrMBB.end()) {
+      for (auto &Regs : EqLocAfterPred) {
+        RegisterOffsetPair Reg{Regs.first.RegNum, Regs.first.Offset,
+                               Regs.first.IsDeref};
+        if (EqLocBeforeCurrMBB.find(Reg) != EqLocBeforeCurrMBB.end()) {
           std::set<RegisterOffsetPair> NewSet;
           std::set_intersection(
-              EqLocBeforeCurrMBB[reg].begin(), EqLocBeforeCurrMBB[reg].end(),
-              EqLocAfterPred[reg].begin(), EqLocAfterPred[reg].end(),
+              EqLocBeforeCurrMBB[Reg].begin(), EqLocBeforeCurrMBB[Reg].end(),
+              EqLocAfterPred[Reg].begin(), EqLocAfterPred[Reg].end(),
               std::inserter(NewSet, NewSet.begin()));
           if (NewSet.size() == 0) {
-            EqLocBeforeCurrMBB.erase(reg);
+            EqLocBeforeCurrMBB.erase(Reg);
           } else {
-            EqLocBeforeCurrMBB[reg] = NewSet;
+            EqLocBeforeCurrMBB[Reg] = NewSet;
           }
         }
       }
-      for (auto &regs : make_early_inc_range(EqLocBeforeCurrMBB)) {
-        RegisterOffsetPair reg{regs.first.RegNum, regs.first.Offset,
-                               regs.first.IsDeref};
-        if (EqLocAfterPred.find(reg) != EqLocAfterPred.end()) {
+      for (auto &Regs : make_early_inc_range(EqLocBeforeCurrMBB)) {
+        RegisterOffsetPair Reg{Regs.first.RegNum, Regs.first.Offset,
+                               Regs.first.IsDeref};
+        if (EqLocAfterPred.find(Reg) != EqLocAfterPred.end()) {
           std::set<RegisterOffsetPair> NewSet;
           std::set_intersection(
-              EqLocBeforeCurrMBB[reg].begin(), EqLocBeforeCurrMBB[reg].end(),
-              EqLocAfterPred[reg].begin(), EqLocAfterPred[reg].end(),
+              EqLocBeforeCurrMBB[Reg].begin(), EqLocBeforeCurrMBB[Reg].end(),
+              EqLocAfterPred[Reg].begin(), EqLocAfterPred[Reg].end(),
               std::inserter(NewSet, NewSet.begin()));
           if (NewSet.size() == 0) {
-            EqLocBeforeCurrMBB.erase(reg);
+            EqLocBeforeCurrMBB.erase(Reg);
           } else {
-            EqLocBeforeCurrMBB[reg] = NewSet;
+            EqLocBeforeCurrMBB[Reg] = NewSet;
           }
         } else {
-          EqLocBeforeCurrMBB.erase(reg);
+          EqLocBeforeCurrMBB.erase(Reg);
         }
       }
     }
