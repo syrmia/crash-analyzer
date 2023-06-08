@@ -1102,26 +1102,112 @@ RegisterEquivalence *crash_analyzer::TaintAnalysis::getREAnalysis() {
   return REA;
 }
 
-static MachineInstr* getCrashStartMI(const MachineFunction &MF){
+// Finds a crash-start instruction.
+static MachineInstr *getCrashStartMI(const MachineFunction &MF) {
   for (auto &MBB : MF) {
-    for (auto MIIt = MBB.rbegin(); MIIt != MBB.rend(); ++MIIt) {
+    for (auto MIIt = MBB.rbegin(), MIItEnd = MBB.rend(); MIIt != MIItEnd;
+         ++MIIt) {
       auto &MI = *MIIt;
       if (MI.getFlag(MachineInstr::CrashStart)) {
-        return (MachineInstr*) &MI;
+        return (MachineInstr *)&MI;
       }
     }
   }
   return nullptr;
 }
 
-struct TaintAnalysisQueueElem {
-  MachineBasicBlock* MBB;
-  SmallVector<MachineBasicBlock*, 8> Successors;
-  TaintAnalysisQueueElem(MachineBasicBlock* MBB) : MBB(MBB) {}
-};
+// Inserts a predecessor of an already processed block into a queue if needed.
+// Also inserts the already processed block into a list of successors through
+// which the predecessor was reached if needed.
+static void insertIntoQueueAndSuccessorsList(
+    std::deque<TaintAnalysis::TaintAnalysisQueueElem> &QueueMbb,
+    MachineBasicBlock *MBBPred, MachineBasicBlock *MBB) {
+  // Suppose that a predecessor hasn't been put into the queue.
+  bool Contains = false;
+  // Search for the predecessor in the queue.
+  for (auto QueueIt = QueueMbb.begin(), QueueItEnd = QueueMbb.end();
+       QueueIt != QueueItEnd; QueueIt++) {
+    if (QueueIt->MBB == MBBPred) {
+      Contains = true;
+      // Suppose that the already processed block hasn't been put into the list
+      // of successors.
+      bool SuccessorInserted = false;
+      // Search for the already processed block in the vector.
+      for (auto *Succ : QueueIt->Successors) {
+        if (Succ == MBB) {
+          SuccessorInserted = true;
+          break;
+        }
+      }
+      if (!SuccessorInserted) {
+        QueueIt->Successors.push_back(MBB);
+      }
+      break;
+    }
+  }
+  // If the predecessor hasn't been put into the queue, put it into the queue
+  // together with the already processed block.
+  if (!Contains) {
+    TaintAnalysis::TaintAnalysisQueueElem QueueElem(MBBPred);
+    QueueElem.Successors.push_back(MBB);
+    QueueMbb.push_back(QueueElem);
+  }
+}
+
+void crash_analyzer::TaintAnalysis::mergeRegVals(
+    DenseMap<const MachineBasicBlock *, MachineFunction::RegisterCrashInfo>
+        &RegVals,
+    TaintAnalysisQueueElem &QueueElem) {
+
+  assert(QueueElem.Successors.size() <= 2 &&
+         "There can be a maximum of two successors: if the last instruction of "
+         "the block is a conditional branch instruction, there are two "
+         "successors, otherwise there is one successor");
+
+  // A block that will be processed.
+  auto *MBB = QueueElem.MBB;
+
+  // An indicator whether register values from any successor were merged.
+  bool SuccessorProcessed = false;
+
+  // A result of merging register values.
+  MachineFunction::RegisterCrashInfo NewRegInfo;
+
+  // Merge register values from each successor.
+  for (auto *SuccBlock : QueueElem.Successors) {
+
+    // The register values from a current successor.
+    auto &SuccRegVals = RegVals[SuccBlock];
+
+    // If no successor has been processed, just copy the registers values from a
+    // successor.
+    if (!SuccessorProcessed) {
+      NewRegInfo = SuccRegVals;
+      SuccessorProcessed = true;
+    } else {
+      // Invalidate all register values that differ at the current successor and
+      // at the current result. During reverse execution it is generally unknown
+      // which block was really a predecessor and that's why it is used
+      // invalidation.
+      for (auto &Reg2 : SuccRegVals) {
+        for (auto &Reg1 : NewRegInfo) {
+          if (Reg2.Name == Reg1.Name) {
+            if (Reg2.Value != Reg1.Value) {
+              Reg1.Value = "";
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  RegVals[MBB] = NewRegInfo;
+}
 
 // Return true if taint is terminated.
 // Return false otherwise.
+// TODO: When a scalar evolution pass at LLVM MIR level is added, a support for
+// a loop trip count will be added.
 bool crash_analyzer::TaintAnalysis::runOnBlameMF(
     BlameModule &BM, const MachineFunction &MF, TaintDataFlowGraph &TaintDFG,
     bool CalleeNotInBT, unsigned levelOfCalledFn,
@@ -1147,6 +1233,10 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
     MBB_TL_Map[&MBB] = _tmp;
   }
 
+  // Maps the basic blocks into the registers values information.
+  DenseMap<const MachineBasicBlock *, MachineFunction::RegisterCrashInfo>
+      RegVals;
+
   // TODO: Combine the forward analysis with reading of concrete
   // values from core-file for the purpose of reconstructing
   // concrete memory addresses when a base register is not
@@ -1160,39 +1250,61 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
 
   auto TII = MF.getSubtarget().getInstrInfo();
 
+  // Find a crash-start instruction.
   auto CrashStartInstr = getCrashStartMI(MF);
 
+  // A queue that determines the order of processing blocks.
   std::deque<TaintAnalysisQueueElem> QueueMbb;
 
-  if(CrashStartInstr != nullptr){
-    TaintAnalysisQueueElem QueueElem(CrashStartInstr->getParent());
+  // If a crash-start instruction was found, put its block into the queue and
+  // initialize its register values.
+  if (CrashStartInstr != nullptr) {
+    auto MBB = CrashStartInstr->getParent();
+    RegVals[MBB] = MF.getCrashRegInfo();
+    // Set a pointer to the current register values information.
+    ReverseExecutionRecord.setCurrentRegisterValues(&RegVals[MBB]);
+    TaintAnalysisQueueElem QueueElem(MBB);
     QueueMbb.push_back(QueueElem);
   }
 
   // Perform backward analysis on the MF.
-  
-  while(!QueueMbb.empty()) {
+  // While the queue isn't empty, take a block from the begining of a queue and
+  // process it.
+  while (!QueueMbb.empty()) {
     auto QueueElem = QueueMbb.front();
-    auto MBB = QueueElem.MBB;
+    auto *MBB = QueueElem.MBB;
     QueueMbb.pop_front();
     SmallVector<TaintInfo, 8> &TL_Mbb = MBB_TL_Map.find(MBB)->second;
     CurTL = &TL_Mbb;
 
+    // An old taint list that was obtained after the reversed execution of a
+    // first instruction of the current block.
     SmallVector<TaintInfo, 8> Old_TL_Mbb = TL_Mbb;
 
     TL_Mbb.clear();
 
     // Initialize Taint list for a MBB
     if (CrashSequenceStarted) {
-      for(auto MbbIt = QueueElem.Successors.begin(), MbbItEnd = QueueElem.Successors.end(); MbbIt != MbbItEnd; MbbIt++){
-        auto& SuccTl = MBB_TL_Map.find(*MbbIt)->second;
-        for (auto TlIt = SuccTl.begin(), TlItEnd = SuccTl.end(); TlIt != TlItEnd; TlIt++) {
-          // Add TaintInfo to Dest if already not present
-          if (isTainted(*TlIt, Old_TL_Mbb).Op == nullptr && isTainted(*TlIt, TL_Mbb).Op == nullptr)
+      // Merge taint lists from successors through which the current block was
+      // reached.
+      for (auto MbbIt = QueueElem.Successors.begin(),
+                MbbItEnd = QueueElem.Successors.end();
+           MbbIt != MbbItEnd; MbbIt++) {
+        auto &SuccTl = MBB_TL_Map.find(*MbbIt)->second;
+        for (auto TlIt = SuccTl.begin(), TlItEnd = SuccTl.end();
+             TlIt != TlItEnd; TlIt++) {
+          // Add a taint information to a taint list if already not present in
+          // it and in an old taint list because it doesn't give any new
+          // information.
+          if (isTainted(*TlIt, Old_TL_Mbb).Op == nullptr &&
+              isTainted(*TlIt, TL_Mbb).Op == nullptr)
             addToTaintList(*TlIt, TL_Mbb);
           printTaintList(TL_Mbb);
         }
       }
+      // Merge register information and update a pointer to it.
+      mergeRegVals(RegVals, QueueElem);
+      ReverseExecutionRecord.setCurrentRegisterValues(&RegVals[MBB]);
       // If Taint List for an MBB is empty, then no need to analyze this MBB
       printTaintList(TL_Mbb);
       if (TL_Mbb.empty())
@@ -1393,24 +1505,29 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
       if (!TaintResult)
         Result = true;
     }
-    if(TL_Mbb != Old_TL_Mbb){
-      for(auto MBBPred : MBB->predecessors()){
-        bool contains = false;
-        for(auto QueueIt = QueueMbb.begin(); QueueIt != QueueMbb.end(); QueueIt++){
-          if(QueueIt->MBB == MBBPred){
-            contains = true;
-            QueueIt->Successors.push_back(MBB);
-            break;
-          }
+    // If a taint list has been changed, put the predecessors into the queue.
+    // Otherwise the convergence has been achieved.
+    if (TL_Mbb != Old_TL_Mbb) {
+      // If the current block is a predecessor, put it last in the queue because
+      // the other blocks should be processed first, before the eventual changes
+      // in register values of the current block occur.
+      bool IsMBBPred = false;
+      for (auto *MBBPred : MBB->predecessors()) {
+        if (MBBPred != MBB) {
+          insertIntoQueueAndSuccessorsList(QueueMbb, MBBPred, MBB);
+        } else {
+          IsMBBPred = true;
         }
-        if(!contains){
-          TaintAnalysisQueueElem QueueElem(MBBPred);
-          QueueElem.Successors.push_back(MBB);
-          QueueMbb.push_back(QueueElem);
-        }
+      }
+      if (IsMBBPred) {
+        insertIntoQueueAndSuccessorsList(QueueMbb, MBB, MBB);
       }
     }
   }
+  assert(MF.begin() != MF.end() &&
+         "A function should have at least one block.");
+  // Reset the current taint list to the taint list of the entry block of the
+  // function.
   CurTL = &MBB_TL_Map.find(&*MF.begin())->second;
   resetTaintList(*CurTL);
   setREAnalysis(nullptr);
