@@ -29,6 +29,7 @@ using namespace crash_analyzer;
 // that may store.
 class ConcreteReverseExec {
   // This represents current values in the registers.
+  // TODO: Add a pointer to current memory locations information.
   MachineFunction::RegisterCrashInfo *CurrentRegisterValues = nullptr;
   const MachineFunction *mf;
 

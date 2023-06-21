@@ -1234,6 +1234,7 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
   }
 
   // Maps the basic blocks into the registers values information.
+  // TODO: Add a mapping of basic blocks to the memory locations information.
   DenseMap<const MachineBasicBlock *, MachineFunction::RegisterCrashInfo>
       RegVals;
 
@@ -1303,6 +1304,7 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
         }
       }
       // Merge register information and update a pointer to it.
+      // TODO: Merge memory locations information and update a pointer to it.
       mergeRegVals(RegVals, QueueElem);
       ReverseExecutionRecord.setCurrentRegisterValues(&RegVals[MBB]);
       // If Taint List for an MBB is empty, then no need to analyze this MBB
