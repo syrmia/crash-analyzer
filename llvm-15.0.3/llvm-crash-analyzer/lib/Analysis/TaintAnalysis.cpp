@@ -1187,7 +1187,7 @@ void crash_analyzer::TaintAnalysis::mergeRegVals(
     } else {
       // Invalidate all register values that differ at the current successor and
       // at the current result. During reverse execution it is generally unknown
-      // which block was really a predecessor and that's why it is used
+      // which block was really a successor and that's why it is used
       // invalidation.
       for (auto &Reg2 : SuccRegVals) {
         for (auto &Reg1 : NewRegInfo) {
