@@ -257,6 +257,8 @@ bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
     SrcOffset += *CATI->getInstAddr(&MI) + *CATI->getInstSize(&MI);
   }
 
+  // TODO: Consider source scale and source index register.
+  // Example: mov [%rax,%rcx,4],%esi  ==> esi = [rax + rcx * 4]
   RegisterOffsetPair Src{SrcReg, SrcOffset};
   Src.IsDeref = true;
   RegisterOffsetPair Dest{DestReg};
@@ -264,8 +266,10 @@ bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
   // First invalidate dest reg, since it is being rewritten.
   invalidateAllRegUses(MI, Dest);
 
-  // If SrcReg is redefined (same as DestReg), set only identity equivalence.
-  if (TRI->regsOverlap(DestReg, SrcReg)) {
+  // If SrcReg or SrcIndexReg is redefined (same as DestReg), set only identity equivalence.
+  if (TRI->regsOverlap(DestReg, SrcReg) ||
+      (srcDest->SrcIndexReg != nullptr && srcDest->SrcIndexReg->isReg() &&
+       TRI->regsOverlap(DestReg, srcDest->SrcIndexReg->getReg()))) {
     if (RegInfo[&MI][Dest].find(Src) == RegInfo[&MI][Dest].end())
       RegInfo[&MI][Src].insert(Src);
     return true;
