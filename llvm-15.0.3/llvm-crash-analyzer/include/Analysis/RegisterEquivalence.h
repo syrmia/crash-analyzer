@@ -22,6 +22,7 @@
 using namespace llvm;
 using namespace crash_analyzer;
 
+// TODO: Consider scale and index register.
 struct RegisterOffsetPair {
   unsigned RegNum;
   int64_t Offset = 0;

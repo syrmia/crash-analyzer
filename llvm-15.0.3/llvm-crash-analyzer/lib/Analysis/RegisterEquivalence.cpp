@@ -351,6 +351,8 @@ bool RegisterEquivalence::applyRegDef(MachineInstr &MI) {
   return true;
 }
 
+// TODO: Consider an immediate source operand. A possible solution for that
+// operand: RegisterOffsetPair{0, offset, false}.
 void RegisterEquivalence::processMI(MachineInstr &MI) {
   if (applyRegisterCopy(MI))
     return;
