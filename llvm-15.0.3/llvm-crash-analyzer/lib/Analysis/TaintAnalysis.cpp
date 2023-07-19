@@ -1556,7 +1556,7 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
   setREAnalysis(&REAnalysis);
 
   // Init the concrete reverse execution.
-  ConcreteReverseExec ReverseExecutionRecord(&MF, MemWrapper);
+  ConcreteReverseExec ReverseExecutionRecord(&MF, MemWrapper, &REAnalysis);
   setCRE(&ReverseExecutionRecord);
   ReverseExecutionRecord.dump();
 
