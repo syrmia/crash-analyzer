@@ -240,9 +240,11 @@ body:             |
   auto *MF = MMI.getMachineFunction(*F);
   ASSERT_TRUE(MF);
 
-  ConcreteReverseExec ReverseExecutionRecord(MF);
+  MemoryWrapper MW;
+  ConcreteReverseExec ReverseExecutionRecord(MF, MW);
   MachineFunction::RegisterCrashInfo RegInfo = MF->getCrashRegInfo();
   ReverseExecutionRecord.setCurrentRegisterValues(&RegInfo);
+
   bool CrashSequenceStarted = false;
 
   auto TRI = MF->getSubtarget().getRegisterInfo();
