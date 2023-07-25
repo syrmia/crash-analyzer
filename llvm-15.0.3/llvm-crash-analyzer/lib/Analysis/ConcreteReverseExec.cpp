@@ -274,9 +274,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
           AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TRI);
         }
 
-        // TO DO: Add support for PC relative addressing,
-        // needs to add the size of machine instruction to total address size
-        if (AddrStr != "" && !(CATI && CATI->isPCRegister(RegName))) {
+        if (AddrStr != "") {
           uint64_t Addr = 0;
           std::stringstream SS;
           SS << std::hex << AddrStr;
@@ -307,6 +305,21 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
             }
 
+            if(CATI->isPCRegister(RegName))
+            {
+              auto InstSize = CATI->getInstSize(&MI);
+              if(InstSize.hasValue())
+              {
+                Addr += *InstSize;
+              }
+              else
+              {
+                // TO DO: Check if getInstSize returns None some times
+                LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
+                 << MI << "\n";);
+              }
+            }
+
             Optional<uint64_t> MemValOptional =
                 MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
             llvm::dbgs() << error.GetCString() << "\n";
@@ -325,6 +338,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               writeUIntRegVal(RegName, Addr - (*DestSrc.DestOffset),
                               AddrStr.size() - 2);
             }
+
             MemWrapper.InvalidateAddress(Addr, byteSize);
             dump();
 
@@ -397,11 +411,6 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
             // TO DO: Add support for PC relative addressing,
             // needs to add the size of machine instruction to total address
             // size
-            if (CATI && CATI->isPCRegister(SrcRegStr)) {
-              invalidateRegVal(RegName);
-              dump();
-              continue;
-            }
             auto srcRegVal = getCurretValueInReg(SrcRegStr);
             if (srcRegVal == "") {
               srcRegVal =
@@ -434,7 +443,23 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
             uint64_t Addr;
             std::istringstream(srcRegVal) >> std::hex >> Addr;
             Addr += static_cast<uint64_t>(*DestSrc.SrcOffset);
-
+            if(CATI->isPCRegister(SrcRegStr))
+            {
+              auto InstSize = CATI->getInstSize(&MI);
+              if(InstSize.hasValue())
+              {
+                Addr += *InstSize;
+              }
+              else
+              {
+                // TO DO: Check if getInstSize returns None some times
+                LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
+                 << MI << "\n";);
+                 invalidateRegVal(RegName);
+                 dump();
+                 continue;
+              }
+            }
             // TO DO: Check if this is right
             uint32_t bitSize =
                 TRI->getRegSizeInBits(DestSrc.Destination->getReg(), MRI);
