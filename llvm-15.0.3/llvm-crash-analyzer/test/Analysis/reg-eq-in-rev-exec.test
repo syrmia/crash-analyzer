@@ -1,3 +1,4 @@
+# Produced with clang++ -g -O0 m.cpp -o m
 # void g(int* px)
 #{
 #    *px = 2;

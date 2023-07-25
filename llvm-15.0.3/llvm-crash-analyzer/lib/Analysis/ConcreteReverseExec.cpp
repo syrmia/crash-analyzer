@@ -315,6 +315,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               else
               {
                 // TO DO: Check if getInstSize returns None some times
+                // Note: It has all insts up until crash-start
                 LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
                  << MI << "\n";);
               }
