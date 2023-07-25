@@ -1,0 +1,43 @@
+# Produced with clang++ -g -O0 m.cpp -o m
+
+##include <iostream>
+#int** ppx;
+#
+#void h(int* x)
+#{
+#    *x = 4;
+#}
+#
+#void g(int* x)
+#{
+#    h(x);
+#}
+#
+#void f()
+#{
+#    int x = 3;
+#    int y = 4;
+#    x = x + y;
+#    int* py = &y;
+#    int* px = &x;
+#    ppx = &px;
+#    *ppx = nullptr;
+#    ppx = ppx + 1;
+#    g(px);
+#}
+#
+#int main()
+#{
+#    f();
+#    return 0;
+#}
+
+# RUN: %llvm-crash-analyzer --core-file=%S/Inputs/core.global-pointer-add-reset-mem \
+# RUN: %S/Inputs/global-pointer-add-reset-mem --print-potential-crash-cause-loc \
+# RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
+
+# CHECK: Addressing valid location: 0x0000563fcbf3a048 : 0x00007ffcd9c0da20, byte_size: 8
+# CHECK: Writing location: 0x0000563fcbf3a048 : 0x00007ffcd9c0da18, byte_size: 8
+# CHECK: Addressing valid location: 0x0000563fcbf3a048 : 0x00007ffcd9c0da18, byte_size: 8
+# CHECK: Blame Function is f()
+# CHECK-NEXT: From File {{.*}}:22:10
