@@ -1,0 +1,70 @@
+# Produced with clang++ -g -O0 m.cpp -o m
+
+#void f()
+#{
+#    char a = 0x0F;
+#    short b = 0x00FF;
+#    int c = 0x00FFFFFF;
+#    long d = 0x00FFFFFFFFFFFFFF;
+#    int *p = nullptr;
+#
+#    // a = a + 1;
+#    // a = a - 2;
+#    
+#    // b = b + 1;
+#    // b = b - 2;
+#    // b = b + 0x1000;
+#    // b = b - 0x1001;
+#
+#    __asm__(
+#        "mov %0, %%al;"
+#        "add $1, %%al;"
+#        "sub $2, %%al;"
+#        "mov %%al, %0;"
+#        
+#        "mov %1, %%ax;"
+#        "add $1, %%ax;"
+#        "sub $2, %%ax;"
+#        "add $4096, %%ax;"
+#        "sub $4097, %%ax;"
+#        "mov %%ax, %1;"
+#        :"=m" (a), "=m" (b)
+#        :"0" (a), "1" (b)
+#    );
+#
+#
+#    c = c + 1;
+#    c = c - 2;
+#    c = c + 0x1000;
+#    c = c - 0x1001;
+#
+#    d = d + 1;
+#    d = d - 2;
+#    d = d + 0x1000;
+#    d = d - 0x1001;
+#
+#    *p = 1;
+#}
+#int main()
+#{
+#    f();
+#    return 0;
+#}
+
+# RUN: %llvm-crash-analyzer --core-file=%S/Inputs/core.arithmetic-insts \
+# RUN: %S/Inputs/arithmetic-insts --print-potential-crash-cause-loc \
+# RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
+
+# CHECK: Addressing valid location: 0x00007fff07bfe320 : 0x00fffffffffffffd, byte_size: 8
+# CHECK: Writing location: 0x00007fff07bfe320 : 0x0100000000000ffe, byte_size: 8
+# CHECK: Writing location: 0x00007fff07bfe320 : 0x00ffffffffffffff, byte_size: 8
+# CHECK: Addressing valid location: 0x00007fff07bfe328 : 0x00fffffd, byte_size: 4
+# CHECK: Writing location: 0x00007fff07bfe328 : 0x01000ffe, byte_size: 4
+# CHECK: Writing location: 0x00007fff07bfe328 : 0x00ffffff, byte_size: 4
+# CHECK: Addressing valid location: 0x00007fff07bfe32c : 0x00fd, byte_size: 2
+# CHECK: Writing location: 0x00007fff07bfe32c : 0x00ff, byte_size: 2
+# CHECK: Addressing valid location: 0x00007fff07bfe32f : 0x0e, byte_size: 1
+# CHECK: Writing location: 0x00007fff07bfe32f : 0x0f, byte_size: 1
+
+# CHECK: Blame Function is f()
+# CHECK-NEXT: From File {{.*}}:7:10
