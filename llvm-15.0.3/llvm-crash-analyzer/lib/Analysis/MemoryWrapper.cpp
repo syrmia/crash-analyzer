@@ -241,7 +241,6 @@ void crash_analyzer::MemoryWrapper::InvalidateAddress(uint64_t addr,
   uint64_t alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   uint64_t alignedAddr = addr - alignmentOffset;
   std::stringstream SS;
-  bool notLoadedYet = false;
   for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
     uint8_t mask = (0xFFU >> (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset));
     if (i + NUM_OF_BYTES_PER_ADDRESS - alignmentOffset > size) {

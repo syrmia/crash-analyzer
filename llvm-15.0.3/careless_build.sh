@@ -51,7 +51,7 @@ if [ $? -eq 0 ]; then
 				echo -e "\n\nToo much mem consumption even on 1 processor, try freeing memory before executing this script\n\n"
 				FAIL_END=1;
 			else			
-				echo -e "\n\nKilled build switched to slow mode!\n\n"
+				echo -e "\n\nKilled build switched to slower mode!\n\n"
 				while [ $FREE_MEM -lt 10 ]; do
 					sleep 0.25s;
 					FREE_MEM=$( free -m | awk 'NR==2{printf "%d", $7*100/$2 }' );
