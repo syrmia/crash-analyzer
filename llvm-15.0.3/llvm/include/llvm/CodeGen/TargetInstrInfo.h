@@ -2094,6 +2094,11 @@ public:
 
   virtual Optional<uint32_t>
   getBitSizeOfMemoryDestination(const MachineInstr &MI) const;
+
+  // Returns 1 if an instruction is add to register, -1 id sub
+  // to register if register Reg is src for that instruction
+  // 0 otherwise
+  virtual int isAddToDest(const MachineInstr &MI, MachineOperand* MO, Optional<int64_t> Offset) const;
 };
 
 /// Provide DenseMapInfo for TargetInstrInfo::RegSubRegPair.
