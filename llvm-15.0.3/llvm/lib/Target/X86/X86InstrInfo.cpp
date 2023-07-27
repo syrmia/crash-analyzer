@@ -712,6 +712,8 @@ bool X86InstrInfo::isLoad(const MachineInstr &MI) const {
   case X86::MOV32rm:
   case X86::MOV64rm:
   case X86::MOVSX64rm32:
+  case X86::MOV16rm:
+  case X86::MOV8rm:
     return true;
   default:
     return false;
@@ -723,6 +725,10 @@ bool X86InstrInfo::isStore(const MachineInstr &MI) const {
   case X86::MOV32mi:
   case X86::MOV64mr:
   case X86::MOV32mr:
+  case X86::MOV16mi:
+  case X86::MOV16mr:
+  case X86::MOV8mr:
+  case X86::MOV8mi:
     return true;
   default:
     return false;
@@ -786,6 +792,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
                           None, DstScale, DstIndexReg, 0};
   }
   case X86::MOV8rm:
+  case X86::MOV16rm:
   case X86::MOV32rm:
   case X86::MOV64rm:
   case X86::MOVDQArm:
@@ -860,16 +867,33 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     return DestSourcePair{*BaseOp, Offset, *Src};
     // FIXME: Can Dest be scaled-index address in this case?
   }
+  case X86::SUB8i8:
+  case X86::SUB16i16:
+  case X86::SUB32i32:
+  case X86::SUB64i32:
+  case X86::ADD8i8:
+  case X86::ADD16i16:
   case X86::ADD32i32:
   case X86::ADD64i32: {
     const MachineOperand *Dest = &(MI.getOperand(1));
     const MachineOperand *Src = &(MI.getOperand(3));
     return DestSourcePair{Dest, Src, None, None, nullptr, None, nullptr, 0, 0};
   }
+  case X86::ADD8ri8:
+  case X86::ADD8ri:
+  case X86::ADD16ri8:
+  case X86::ADD16ri:
   case X86::ADD32ri8:
+  case X86::ADD32ri:
   case X86::ADD64ri8:
-  case X86::SUB64ri8:
+  case X86::ADD64ri32:
+  case X86::SUB8ri8:
+  case X86::SUB8ri:
+  case X86::SUB16ri8:
+  case X86::SUB16ri:
   case X86::SUB32ri8:
+  case X86::SUB32ri:
+  case X86::SUB64ri8:
   case X86::SUB64ri32: {
     const MachineOperand *Dest = &(MI.getOperand(0));
     const MachineOperand *Src = &(MI.getOperand(1));
@@ -999,11 +1023,12 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::ADD16rr:
   case X86::ADD32rr:
   case X86::ADD64rr:
-  case X86::ADD8ri:
-  case X86::ADD16ri:
-  case X86::ADD32ri:
-  case X86::ADD16ri8:
-  case X86::ADD64ri32:
+  // Already implemented in the function
+  // case X86::ADD8ri:
+  // case X86::ADD16ri:
+  // case X86::ADD32ri:
+  // case X86::ADD16ri8:
+  // case X86::ADD64ri32:
   case X86::SUB8rr:
   case X86::SUB16rr:
   case X86::SUB32rr:
@@ -4562,25 +4587,51 @@ X86InstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
 
 Optional<RegImmPair> X86InstrInfo::isAddImmediate(const MachineInstr &MI,
                                                   Register Reg) const {
-  if (!MI.getOperand(0).isReg())
-    return None;
 
-  if (Reg != MI.getOperand(0).getReg())
+  if ((!MI.getOperand(0).isReg() || Reg != MI.getOperand(0).getReg()) &&
+      (!MI.getOperand(1).isReg() || Reg != MI.getOperand(1).getReg()))
     return None;
-
+  int64_t Sign = 1;
   int64_t Offset = 0;
   switch (MI.getOpcode()) {
   default:
     return None;
+  case X86::SUB8ri8:
+  case X86::SUB8ri:
+  case X86::SUB16ri8:
+  case X86::SUB16ri:
+  case X86::SUB32ri8:
+  case X86::SUB32ri:
+  case X86::SUB64ri8:
+  case X86::SUB64ri32:
+    Sign = -1;
+    LLVM_FALLTHROUGH;
+  case X86::ADD8ri8:
+  case X86::ADD8ri:
+  case X86::ADD16ri8:
+  case X86::ADD16ri:
   case X86::ADD32ri8:
-    // $eax = ADD32ri8 $eax(tied-def 0), 1
-    Offset = MI.getOperand(2).getImm();
-    break;
+  case X86::ADD32ri:
   case X86::ADD64ri8:
-    Offset = MI.getOperand(2).getImm();
-    break;
+  case X86::ADD64ri32:
+    // $eax = ADD32ri8 $eax(tied-def 0), 1
+    Offset = Sign * MI.getOperand(2).getImm();
+    return RegImmPair{MI.getOperand(1).getReg(), Offset};
+  
+  case X86::SUB8i8:
+  case X86::SUB16i16:
+  case X86::SUB32i32:
+  case X86::SUB64i32:
+    Sign = -1;
+    LLVM_FALLTHROUGH;
+  case X86::ADD8i8:
+  case X86::ADD16i16:
+  case X86::ADD32i32:
+  case X86::ADD64i32:
+    Offset = Sign * MI.getOperand(0).getImm();
+    return RegImmPair{MI.getOperand(1).getReg(), Offset};
   }
-  return RegImmPair{MI.getOperand(1).getReg(), Offset};
+
 }
 
 static unsigned getLoadStoreRegOpcode(Register Reg,
@@ -11153,7 +11204,7 @@ MachineBasicBlock::iterator X86InstrInfo::insertOutlinedCall(
 
 Optional<uint32_t>
 X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
-  if (!this->isStore(MI)) {
+  if (!this->isStore(MI) && !this->isPush(MI)) {
     return None;
   }
 

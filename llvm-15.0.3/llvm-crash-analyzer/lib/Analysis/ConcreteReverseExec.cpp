@@ -94,6 +94,18 @@ void ConcreteReverseExec::updateCurrRegVal(std::string Reg, std::string Val) {
             R.Value = "0x" + Val.substr(/*2 bytes*/ Val.size() - 4);
           }
         }
+        else if (CATI->getRegSize(Reg) == 8 && *Reg.rbegin() == 'l') {
+          const unsigned RegValInBits = (Val.size() - 2) / 2 * 8;
+          if(RegValInBits <= 8)
+            R.Value = Val;
+          else {
+            // drop 0x
+            Val.erase(Val.begin());
+            Val.erase(Val.begin());
+            // get last 2 bytes
+            R.Value = "0x" + Val.substr(/*1 byte*/ Val.size() - 2);
+          }
+        }
         return;
       }
 
@@ -255,7 +267,6 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
   auto TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
 
   auto &MRI = MI.getMF()->getRegInfo();
-
   // This will be used to avoid implicit operands that can be in the instruction
   // multiple times.
   std::multiset<Register> RegisterWorkList;
@@ -323,7 +334,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
             Optional<uint64_t> MemValOptional =
                 MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
-            llvm::dbgs() << error.GetCString() << "\n";
+            LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
             if (MemValOptional.hasValue() && DestSrc.Source &&
                 !DestSrc.Source2) {
               if (!DestSrc.Src2Offset.hasValue() && DestSrc.Source->isReg()) {
@@ -389,14 +400,22 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       // In c_test_cases/test3.c there is a case
       //  $eax = ADD32ri8 $eax(tied-def 0), 1
       // so handle it.
+
+      // To add more support for AddImmediate, change
+      // X86TargetInstrInfo::isAddImmediate function
+      // Now it also includes sub instrs, but not all
+      // of them
       if (auto RegImm = TII->isAddImmediate(MI, Reg)) {
-        // We do the oposite operation, since we are
-        // intereting the instruction going backward.
-        Val -= RegImm->Imm;
-        // Write current value of the register in the map.
-        writeUIntRegVal(RegName, Val, regVal.size() - 2);
-        dump();
-        continue;
+        if(RegImm->Reg == Reg)
+        {
+          // We do the oposite operation, since we are
+          // intereting the instruction going backward.
+          Val -= RegImm->Imm;
+          // Write current value of the register in the map.
+          writeUIntRegVal(RegName, Val, regVal.size() - 2);
+          dump();
+          continue;
+        }
       }
 
       if (TII->isLoad(MI)) {

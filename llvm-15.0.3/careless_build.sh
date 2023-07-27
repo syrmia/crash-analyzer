@@ -48,17 +48,17 @@ if [ $? -eq 0 ]; then
 			pkill -P $BUILD_PID;
 			kill $BUILD_PID;
 			if [ $FAST -eq  1 ]; then
-				echo -e "\n\nToo much mem consumption even on 1 processor\n\n"
+				echo -e "\n\nToo much mem consumption even on 1 processor, try freeing memory before executing this script\n\n"
 				FAIL_END=1;
 			else			
 				echo -e "\n\nKilled build switched to slow mode!\n\n"
-				while [ $FREE_MEM -lt 25 ]; do
+				while [ $FREE_MEM -lt 10 ]; do
 					sleep 0.25s;
 					FREE_MEM=$( free -m | awk 'NR==2{printf "%d", $7*100/$2 }' );
 				done
-				ninja -C build -j 1 &> output.txt &
-				BUILD_PID=$!;
 				(( FAST=FAST/2 ));
+				ninja -C build -j $FAST &> output.txt &
+				BUILD_PID=$!;
 				STOPPED=1;
 			fi
 
