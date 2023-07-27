@@ -669,6 +669,10 @@ public:
   // TO DO: Implement for other instructions
   Optional<uint32_t>
   getBitSizeOfMemoryDestination(const MachineInstr &MI) const override;
+
+  // Doesn't report for add immediate instructions,
+  // they are covered by isAddImmediate function
+  int isAddToDest(const MachineInstr &MI, MachineOperand *MO, Optional<int64_t> Offset) const override;
 };
 
 } // namespace llvm

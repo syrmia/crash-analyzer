@@ -11236,5 +11236,33 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
   return None;
 }
 
+// Doesn't report for add immediate to reg instructions,
+// they are covered by isAddImmediate function
+int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Optional<int64_t> Offset) const
+{
+  if(Offset.hasValue()){
+    // TODO: implement add to reg ind mem
+    return 0;
+  }
+  else{
+    if(!MO || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
+      return 0;
+  }
+  switch(MI.getOpcode()){
+    default:
+      return 0;
+    case X86::SUB8rm:
+    case X86::SUB16rm:
+    case X86::SUB32rm:
+    case X86::SUB64rm:
+      return -1;
+    case X86::ADD8rm:
+    case X86::ADD16rm:
+    case X86::ADD32rm:
+    case X86::ADD64rm:
+      return 1;
+  }
+}
+
 #define GET_INSTRINFO_HELPERS
 #include "X86GenInstrInfo.inc"
