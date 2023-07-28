@@ -270,93 +270,171 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
   // This will be used to avoid implicit operands that can be in the instruction
   // multiple times.
   std::multiset<Register> RegisterWorkList;
+  int Sign = 0;
+  auto OptDestSrc = TII->getDestAndSrc(MI); 
 
-  if (TII->isStore(MI) || TII->isPush(MI)) {
-    auto OptDestSrc = TII->getDestAndSrc(MI);
-    if (OptDestSrc.hasValue()) {
-      DestSourcePair &DestSrc = *OptDestSrc;
+  if (OptDestSrc.hasValue() && (TII->isStore(MI) || TII->isPush(MI))) {
+    DestSourcePair &DestSrc = *OptDestSrc;
 
-      if (DestSrc.Destination) {
-        auto Reg = DestSrc.Destination->getReg();
-        std::string RegName = TRI->getRegAsmName(Reg).lower();
+    if (DestSrc.Destination) {
+      auto Reg = DestSrc.Destination->getReg();
+      std::string RegName = TRI->getRegAsmName(Reg).lower();
 
-        auto AddrStr = getCurretValueInReg(RegName);
-        if (AddrStr == "") {
-          AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TRI);
-        }
+      auto AddrStr = getCurretValueInReg(RegName);
+      if (AddrStr == "") {
+        AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TRI);
+      }
 
-        if (AddrStr != "") {
-          uint64_t Addr = 0;
-          std::stringstream SS;
-          SS << std::hex << AddrStr;
-          SS >> Addr;
-          if (DestSrc.DestOffset.hasValue()) {
-            if (TII->isStore(MI)) {
+      if (AddrStr != "") {
+        uint64_t Addr = 0;
+        std::stringstream SS;
+        SS << std::hex << AddrStr;
+        SS >> Addr;
+        if (DestSrc.DestOffset.hasValue()) {
+          if (TII->isStore(MI)) {
 
-              Addr += static_cast<uint64_t>(*DestSrc.DestOffset);
-              LLVM_DEBUG(llvm::dbgs()
-                             << "Store instruction: " << MI << ", Destination: "
-                             << "(" << RegName << ")"
-                             << "+" << *DestSrc.DestOffset << "\n";);
+            Addr += static_cast<uint64_t>(*DestSrc.DestOffset);
+            LLVM_DEBUG(llvm::dbgs()
+                            << "Store instruction: " << MI << ", Destination: "
+                            << "(" << RegName << ")"
+                            << "+" << *DestSrc.DestOffset << "\n";);
 
-            } else if (TII->isPush(MI)) {
-              // Stack is already aligned on its address
-              LLVM_DEBUG(llvm::dbgs()
-                             << "Push instruction: " << MI << ", Destination: "
-                             << "(" << RegName << ")"
-                             << "+" << *DestSrc.DestOffset << "\n";);
-            }
-            lldb::SBError error;
-            // invalidate 8 bytes if size of instruction is not known
-            uint32_t byteSize = 8;
-
-            Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
-            if (BitSize.hasValue()) {
-              // TO DO: Check if this is right
-              byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
-            }
-
-            if(CATI->isPCRegister(RegName))
-            {
-              auto InstSize = CATI->getInstSize(&MI);
-              if(InstSize.hasValue())
-              {
-                Addr += *InstSize;
-              }
-              else
-              {
-                // TO DO: Check if getInstSize returns None some times
-                // Note: It has all insts up until crash-start
-                LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
-                 << MI << "\n";);
-              }
-            }
-
-            Optional<uint64_t> MemValOptional =
-                MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
-            LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
-            if (MemValOptional.hasValue() && DestSrc.Source &&
-                !DestSrc.Source2) {
-              if (!DestSrc.Src2Offset.hasValue() && DestSrc.Source->isReg()) {
-
-                uint64_t MemVal = *MemValOptional;
-                std::string SrcRegName =
-                    TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
-                auto srcRegVal = getCurretValueInReg(SrcRegName);
-                writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
-              }
-            }
-            if (TII->isPush(MI)) {
-              writeUIntRegVal(RegName, Addr - (*DestSrc.DestOffset),
-                              AddrStr.size() - 2);
-            }
-
-            MemWrapper.InvalidateAddress(Addr, byteSize);
-            dump();
-
-            // continue;
+          } else if (TII->isPush(MI)) {
+            // Stack is already aligned on its address
+            LLVM_DEBUG(llvm::dbgs()
+                            << "Push instruction: " << MI << ", Destination: "
+                            << "(" << RegName << ")"
+                            << "+" << *DestSrc.DestOffset << "\n";);
           }
+          lldb::SBError error;
+          // invalidate 8 bytes if size of instruction is not known
+          uint32_t byteSize = 8;
+
+          Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
+          if (BitSize.hasValue()) {
+            // TO DO: Check if this is right
+            byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
+          }
+
+          if(CATI->isPCRegister(RegName))
+          {
+            auto InstSize = CATI->getInstSize(&MI);
+            if(InstSize.hasValue())
+            {
+              Addr += *InstSize;
+            }
+            else
+            {
+              // TO DO: Check if getInstSize returns None some times
+              // Note: It has all insts up until crash-start
+              LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
+                << MI << "\n";);
+            }
+          }
+
+          Optional<uint64_t> MemValOptional =
+              MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
+          LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
+          if (MemValOptional.hasValue() && DestSrc.Source &&
+              !DestSrc.Source2) {
+            if (!DestSrc.Src2Offset.hasValue() && DestSrc.Source->isReg()) {
+
+              uint64_t MemVal = *MemValOptional;
+              std::string SrcRegName =
+                  TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
+              // auto srcRegVal = getCurretValueInReg(SrcRegName);
+              writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
+            }
+          }
+          if (TII->isPush(MI)) {
+            writeUIntRegVal(RegName, Addr - (*DestSrc.DestOffset),
+                            AddrStr.size() - 2);
+          }
+
+          MemWrapper.InvalidateAddress(Addr, byteSize);
+          dump();
+
+          // continue;
         }
+      }
+    }
+  }
+
+  // Add to mem instructions
+  // Add implementation of add immediate to mem
+  if(OptDestSrc.hasValue() && 
+    (*OptDestSrc).DestOffset.hasValue() &&
+    (Sign = TII->isAddToDest(MI, const_cast<MachineOperand*>((*OptDestSrc).Destination), (*OptDestSrc).DestOffset)))
+  {
+    DestSourcePair &DestSrc = *OptDestSrc;
+    if(DestSrc.Destination)
+    {
+      auto Reg = DestSrc.Destination->getReg();
+      uint64_t SrcVal = 0;
+      uint64_t DestVal = 0;
+      
+      std::string SrcValStr = "";
+      std::string RegName = TRI->getRegAsmName(Reg).lower();
+      if(DestSrc.Source->isReg())
+      {
+        auto SrcReg = DestSrc.Source->getReg();
+        std::string SrcRegName = TRI->getRegAsmName(SrcReg).lower();
+        SrcValStr = getCurretValueInReg(SrcRegName);
+        if(SrcValStr == "")
+        {
+          SrcValStr = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TRI);
+        }
+      }
+
+      auto AddrStr = getCurretValueInReg(RegName);
+      if(AddrStr == "")
+      {
+        AddrStr = getEqRegValue(const_cast<MachineInstr*>(&MI), Reg, *TRI);
+      }
+
+      if(AddrStr != "" && SrcValStr != "")
+      {
+        std::istringstream(SrcValStr) >> std::hex >> SrcVal;
+        uint64_t Addr = 0;
+        std::istringstream(AddrStr) >> std::hex >> Addr;
+        Addr += *DestSrc.DestOffset;
+        LLVM_DEBUG(llvm::dbgs() << "Add memory instruction: " << MI << " Destination: " << "(" << RegName << ")" << "+" << *DestSrc.DestOffset << "\n");
+        if(CATI->isPCRegister(RegName))
+        {
+            auto InstSize = CATI->getInstSize(&MI);
+            if(InstSize.hasValue())
+            {
+              Addr += *InstSize;
+            }
+            else
+            {
+              // TO DO: Check if getInstSize returns None some times
+              // Note: It has all insts up until crash-start
+              LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
+                << MI << "\n";);
+            }
+        }
+
+        lldb::SBError error;
+        // invalidate 8 bytes if size of instruction is not known
+        uint32_t byteSize = 8;
+
+        Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
+        if (BitSize.hasValue()) {
+          // TO DO: Check if this is right
+          byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
+        }
+
+        auto MemValOptional = MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
+        LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
+        if(MemValOptional.hasValue())
+        {
+          DestVal = *MemValOptional;
+          DestVal -= Sign * SrcVal;
+          MemWrapper.WriteMemory(Addr, &DestVal, byteSize, error);
+
+        }
+        dump();
       }
     }
   }
@@ -424,7 +502,9 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       // X86TargetInstrInfo::isAddToDest function
       // along with getDestAndSrc function to
       // support more instructions
-      if (OptDestSrc.hasValue() && (Sign = TII->isAddToDest(MI, const_cast<MachineOperand*>(&MO), (*OptDestSrc).DestOffset)))
+      if (OptDestSrc.hasValue() && 
+         !(*OptDestSrc).DestOffset.hasValue() &&
+         (Sign = TII->isAddToDest(MI, const_cast<MachineOperand*>(&MO), (*OptDestSrc).DestOffset)))
       {
         DestSourcePair &DestSrc = *OptDestSrc;
 
@@ -484,6 +564,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
             Addr += static_cast<uint64_t>(*DestSrc.SrcOffset);
             if(CATI->isPCRegister(SrcRegStr))
             {
+              // TODO: Test this, global addresses
               auto InstSize = CATI->getInstSize(&MI);
               if(InstSize.hasValue())
               {

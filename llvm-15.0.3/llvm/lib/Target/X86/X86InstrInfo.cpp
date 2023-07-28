@@ -853,12 +853,16 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::MOVAPSmr:
   case X86::MOVSSmr:
   case X86::MOV8mr_NOREX:
-  case X86::SUB32mr:
   case X86::OR8mr:
   case X86::OR16mr:
   case X86::OR32mr:
   case X86::OR64mr:
+  case X86::SUB8mr:
+  case X86::SUB16mr:
+  case X86::SUB32mr:
+  case X86::SUB64mr:
   case X86::ADD8mr:
+  case X86::ADD16mr:
   case X86::ADD32mr:
   case X86::ADD64mr: {
     const MachineOperand *Src = &(MI.getOperand(5));
@@ -11204,24 +11208,42 @@ MachineBasicBlock::iterator X86InstrInfo::insertOutlinedCall(
 
 Optional<uint32_t>
 X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
-  if (!this->isStore(MI) && !this->isPush(MI)) {
-    return None;
-  }
+  // if (!this->isStore(MI) && !this->isPush(MI)) {
+  //   return None;
+  // }
 
   switch (MI.getOpcode()) {
   case X86::MOV8mi:
   case X86::MOV8mr:
+  case X86::ADD8mr:
+  case X86::ADD8mi:
+  case X86::ADD8mi8:
+  case X86::SUB8mr:
+  case X86::SUB8mi:
+  case X86::SUB8mi8:
     return 8;
     break;
   case X86::MOV16mi:
   case X86::MOV16mr:
   case X86::PUSH16r:
+  case X86::ADD16mr:
+  case X86::ADD16mi:
+  case X86::ADD16mi8:
+  case X86::SUB16mr:
+  case X86::SUB16mi:
+  case X86::SUB16mi8:
     return 16;
     break;
 
   case X86::MOV32mi:
   case X86::MOV32mr:
   case X86::PUSH32r:
+  case X86::ADD32mr:
+  case X86::ADD32mi:
+  case X86::ADD32mi8:
+  case X86::SUB32mr:
+  case X86::SUB32mi:
+  case X86::SUB32mi8:
     return 32;
     break;
 
@@ -11229,6 +11251,12 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
   case X86::MOV64mi32:
   case X86::MOV64mr:
   case X86::PUSH64r:
+  case X86::ADD64mr:
+  case X86::ADD64mi32:
+  case X86::ADD64mi8:
+  case X86::SUB64mr:
+  case X86::SUB64mi32:
+  case X86::SUB64mi8:
     return 64;
     break;
   }
@@ -11241,11 +11269,12 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
 int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Optional<int64_t> Offset) const
 {
   if(Offset.hasValue()){
-    // TODO: implement add to reg ind mem
+    if(!MO || MI.getNumOperands() < 4 || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg() 
+    || !MI.getOperand(3).isImm() || MI.getOperand(3).getImm() != *Offset)
     return 0;
   }
   else{
-    if(!MO || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
+    if(!MO || MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
       return 0;
   }
   switch(MI.getOpcode()){
@@ -11253,21 +11282,29 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Option
       return 0;
     case X86::SUB8rm:
     case X86::SUB8rr:
+    case X86::SUB8mr:
     case X86::SUB16rm:
     case X86::SUB16rr:
+    case X86::SUB16mr:
     case X86::SUB32rm:
     case X86::SUB32rr:
+    case X86::SUB32mr:
     case X86::SUB64rm:
     case X86::SUB64rr:
+    case X86::SUB64mr:
       return -1;
     case X86::ADD8rm:
     case X86::ADD8rr:
+    case X86::ADD8mr:
     case X86::ADD16rm:
     case X86::ADD16rr:
+    case X86::ADD16mr:
     case X86::ADD32rm:
     case X86::ADD32rr:
+    case X86::ADD32mr:
     case X86::ADD64rm:
     case X86::ADD64rr:
+    case X86::ADD64mr:
       return 1;
   }
 }
