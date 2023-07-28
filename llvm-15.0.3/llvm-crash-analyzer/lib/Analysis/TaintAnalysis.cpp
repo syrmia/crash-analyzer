@@ -917,6 +917,7 @@ bool crash_analyzer::TaintAnalysis::handleGlobalVar(TaintInfo &Ti) {
   // Read global symbol address from Global Offset Table.
   if (Indirect) {
     lldb::SBError err;
+    // TODO: Change this to MemWrapper if necessary
     VarAddr = Dec->getTarget()->GetProcess().ReadUnsignedFromMemory(
         static_cast<uint64_t>(VarAddr), 8, err);
   }

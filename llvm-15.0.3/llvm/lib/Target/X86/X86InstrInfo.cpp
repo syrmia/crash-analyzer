@@ -11252,14 +11252,22 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Option
     default:
       return 0;
     case X86::SUB8rm:
+    case X86::SUB8rr:
     case X86::SUB16rm:
+    case X86::SUB16rr:
     case X86::SUB32rm:
+    case X86::SUB32rr:
     case X86::SUB64rm:
+    case X86::SUB64rr:
       return -1;
     case X86::ADD8rm:
+    case X86::ADD8rr:
     case X86::ADD16rm:
+    case X86::ADD16rr:
     case X86::ADD32rm:
+    case X86::ADD32rr:
     case X86::ADD64rm:
+    case X86::ADD64rr:
       return 1;
   }
 }
