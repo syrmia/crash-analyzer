@@ -1172,10 +1172,22 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::OR16mi:
   case X86::OR32mi8:
   case X86::SHR64mi:
+  case X86::SUB8mi:
+  case X86::SUB8mi8:
   case X86::ADD8mi:
+  case X86::ADD8mi8:
   case X86::AND8mi:
+  case X86::SUB16mi:
+  case X86::SUB16mi8:
+  case X86::ADD16mi:
   case X86::ADD16mi8:
+  case X86::SUB32mi:
+  case X86::SUB32mi8:
+  case X86::ADD32mi:
   case X86::ADD32mi8:
+  case X86::SUB64mi32:
+  case X86::SUB64mi8:
+  case X86::ADD64mi32:
   case X86::ADD64mi8:
   case X86::SETCCm: {
     if (!getMemOperandWithOffset(MI, BaseOp, Offset, OffsetIsScalable, TRI))
@@ -11283,28 +11295,44 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Option
     case X86::SUB8rm:
     case X86::SUB8rr:
     case X86::SUB8mr:
+    case X86::SUB8mi:
+    case X86::SUB8mi8:
     case X86::SUB16rm:
     case X86::SUB16rr:
     case X86::SUB16mr:
+    case X86::SUB16mi:
+    case X86::SUB16mi8:
     case X86::SUB32rm:
     case X86::SUB32rr:
     case X86::SUB32mr:
+    case X86::SUB32mi:
+    case X86::SUB32mi8:
     case X86::SUB64rm:
     case X86::SUB64rr:
     case X86::SUB64mr:
+    case X86::SUB64mi32:
+    case X86::SUB64mi8:
       return -1;
     case X86::ADD8rm:
     case X86::ADD8rr:
     case X86::ADD8mr:
+    case X86::ADD8mi:
+    case X86::ADD8mi8:
     case X86::ADD16rm:
     case X86::ADD16rr:
     case X86::ADD16mr:
+    case X86::ADD16mi:
+    case X86::ADD16mi8:
     case X86::ADD32rm:
     case X86::ADD32rr:
     case X86::ADD32mr:
+    case X86::ADD32mi:
+    case X86::ADD32mi8:
     case X86::ADD64rm:
     case X86::ADD64rr:
     case X86::ADD64mr:
+    case X86::ADD64mi32:
+    case X86::ADD64mi8:
       return 1;
   }
 }
