@@ -67,6 +67,7 @@
 #        "movq $30, %%rax;"
 #        "addq %%rax, %0;"
 #        "movq %%rax, %1;"
+#        "subq $2121, %1;"
 #        :"=m" (d), "=m" (da)
 #        :"0" (d), "1" (da)
 #    );
@@ -75,6 +76,7 @@
 #        "mov $15, %%al;"
 #        "sub %%al, %0;"
 #        "mov %%al, %1;"
+#        "addb $11, %1;"
 #        :"=m" (a), "=m" (aa)
 #        :"0" (a), "1" (aa)
 #    );
@@ -91,23 +93,27 @@
 # RUN: %S/Inputs/arithmetic-insts --print-potential-crash-cause-loc \
 # RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
 
-# CHECK: Addressing valid location: 0x00007ffececfdc7f : 0xff, byte_size: 1
-# CHECK: Writing location: 0x00007ffececfdc7f : 0x0e, byte_size: 1
-# CHECK: Addressing valid location: 0x00007ffececfdc70 : 0x00eeeeeeeeeeef1e, byte_size: 8
-# CHECK: Writing location: 0x00007ffececfdc70 : 0x00eeeeeeeeeeef00, byte_size: 8
-# CHECK: Addressing valid location: 0x00007ffececfdc70 : 0x00eeeeeeeeeeef00, byte_size: 8
-# CHECK: Writing location: 0x00007ffececfdc70 : 0x00eeeeeeeeeeeeec, byte_size: 8
-# CHECK: Writing location: 0x00007ffececfdc70 : 0x00fffffffffffffd, byte_size: 8
-# CHECK: Addressing valid location: 0x00007ffececfdc70 : 0x00fffffffffffffd, byte_size: 8
-# CHECK: Writing location: 0x00007ffececfdc70 : 0x0100000000000ffe, byte_size: 8
-# CHECK: Writing location: 0x00007ffececfdc70 : 0x00ffffffffffffff, byte_size: 8
-# CHECK: Addressing valid location: 0x00007ffececfdc78 : 0x00fffffd, byte_size: 4
-# CHECK: Writing location: 0x00007ffececfdc78 : 0x01000ffe, byte_size: 4
-# CHECK: Writing location: 0x00007ffececfdc78 : 0x00ffffff, byte_size: 4
-# CHECK: Addressing valid location:  0x00007ffececfdc7c : 0x00fd, byte_size: 2
-# CHECK: Writing location:  0x00007ffececfdc7c : 0x00ff, byte_size: 2
-# CHECK: Addressing valid location: 0x00007ffececfdc7f : 0x0e, byte_size: 1
-# CHECK: Writing location: 0x00007ffececfdc7f : 0x0f, byte_size: 1
+# CHECK: Addressing valid location: 0x00007ffd97d08997 : 0x1a, byte_size: 1
+# CHECK: Writing location: 0x00007ffd97d08997 : 0x0f, byte_size: 1
+# CHECK: Addressing valid location: 0x00007ffd97d089cf : 0xff, byte_size: 1
+# CHECK: Writing location: 0x00007ffd97d089cf : 0x0e, byte_size: 1
+# CHECK: Addressing valid location: 0x00007ffd97d08998 : 0xfffffffffffff7d5, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d08998 : 0x000000000000001e, byte_size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef1e, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef00, byte_size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef00, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeeeec, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00fffffffffffffd, byte_size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00fffffffffffffd, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x0100000000000ffe, byte_size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00ffffffffffffff, byte_size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c8 : 0x00fffffd, byte_size: 4
+# CHECK: Writing location: 0x00007ffd97d089c8 : 0x01000ffe, byte_size: 4
+# CHECK: Writing location: 0x00007ffd97d089c8 : 0x00ffffff, byte_size: 4
+# CHECK: Addressing valid location:  0x00007ffd97d089cc : 0x00fd, byte_size: 2
+# CHECK: Writing location:  0x00007ffd97d089cc : 0x00ff, byte_size: 2
+# CHECK: Addressing valid location: 0x00007ffd97d089cf : 0x0e, byte_size: 1
+# CHECK: Writing location: 0x00007ffd97d089cf : 0x0f, byte_size: 1
 
 # CHECK: Blame Function is f()
 # CHECK-NEXT: From File {{.*}}:7:10

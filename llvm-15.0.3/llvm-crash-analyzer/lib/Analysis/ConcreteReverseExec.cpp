@@ -386,7 +386,12 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
           SrcValStr = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TRI);
         }
       }
-
+      else if(DestSrc.Source->isImm())
+      {
+        SrcVal = DestSrc.Source->getImm();
+        // Just put something to pass the if statement afterwards
+        SrcValStr = "1";
+      }
       auto AddrStr = getCurretValueInReg(RegName);
       if(AddrStr == "")
       {
@@ -395,7 +400,10 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
       if(AddrStr != "" && SrcValStr != "")
       {
-        std::istringstream(SrcValStr) >> std::hex >> SrcVal;
+        if(DestSrc.Source->isReg())
+        {
+          std::istringstream(SrcValStr) >> std::hex >> SrcVal;
+        }
         uint64_t Addr = 0;
         std::istringstream(AddrStr) >> std::hex >> Addr;
         Addr += *DestSrc.DestOffset;
