@@ -342,7 +342,6 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               uint64_t MemVal = *MemValOptional;
               std::string SrcRegName =
                   TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
-              // auto srcRegVal = getCurretValueInReg(SrcRegName);
               writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
             }
           }
@@ -353,14 +352,16 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
           MemWrapper.InvalidateAddress(Addr, byteSize);
           dump();
-
-          // continue;
         }
       }
     }
   }
 
   // Add to mem instructions
+  // To add more support for AddToDest change
+  // X86TargetInstrInfo::isAddToDest function
+  // along with getDestAndSrc function to
+  // support more instructions
   // Add implementation of add immediate to mem
   if(OptDestSrc.hasValue() && 
     (*OptDestSrc).DestOffset.hasValue() &&
@@ -498,7 +499,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
       int Sign = 0;
       auto OptDestSrc = TII->getDestAndSrc(MI);
-      // To add more support for AddTiDestm change
+      // To add more support for AddToDest change
       // X86TargetInstrInfo::isAddToDest function
       // along with getDestAndSrc function to
       // support more instructions
