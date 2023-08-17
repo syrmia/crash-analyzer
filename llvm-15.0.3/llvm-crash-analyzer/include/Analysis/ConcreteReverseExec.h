@@ -70,7 +70,7 @@ public:
   // Reverse execution of the MI by updating the currentRegisterValues.
   void execute(const MachineInstr &MI);
 
-  std::string getEqRegValue(MachineInstr *MI, Register &Reg,
+  std::string getEqRegValue(MachineInstr *MI, Register &Reg, const TargetInstrInfo &TII,
                             const TargetRegisterInfo &TRI);
 };
 

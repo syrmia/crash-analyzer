@@ -208,7 +208,9 @@ void ConcreteReverseExec::updatePC(const MachineInstr &MI) {
   dump();
 }
 
-std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
+
+
+std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg, const TargetInstrInfo &TII,
                                                const TargetRegisterInfo &TRI) {
   std::string RetVal = "";
 
@@ -249,11 +251,48 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
           break;
       }
     }
+    // Recursive get of value for ex. rax = (rax)+off, developing phase
+    // Used for structs, works only on O0 - without optimizations
+    if(RetVal == "")
+    {
+      auto OptDestSrc = TII.getDestAndSrc(*MI);
+      if(MI->getParent()->begin() != MI->getIterator() && OptDestSrc.hasValue())
+      {
+        auto DestSrc = *OptDestSrc;
+        if(DestSrc.Source->isReg() && DestSrc.SrcOffset.hasValue() &&
+          DestSrc.Destination->isReg() && !DestSrc.DestOffset.hasValue() &&
+          DestSrc.Source->getReg() == Reg)
+          {
+            auto BaseStr = getEqRegValue(&*std::prev(MI->getIterator()), Reg, TII, TRI);
+            if(BaseStr != "")
+            {
+              uint64_t BaseAddr = 0;
+              std::stringstream SS;
+              SS << std::hex << BaseStr;
+              SS >> BaseAddr;
+              BaseAddr += *DestSrc.SrcOffset;
+              lldb::SBError err;
+              uint32_t bitSize = TRI.getRegSizeInBits(Reg, MRI);
+              uint32_t byteSize = bitSize / 8 + (bitSize % 8 ? 1 : 0);
+              auto ValOpt =
+                  MemWrapper.ReadUnsignedFromMemory(BaseAddr, byteSize, err);
+              if (ValOpt.hasValue()) {
+                SS.clear();
+                SS << std::hex << *ValOpt;
+                SS >> RetVal;
+                // llvm::dbgs() << BaseStr << ":" << RetVal << "\n";
+              }
+            }
+          }
+      }
+    }
+
   }
 
   return RetVal;
 }
 
+// TODO: Check alias registers
 void ConcreteReverseExec::execute(const MachineInstr &MI) {
   // If the option is enabled, we skip the CRE of the MIs.
   if (!getIsCREEnabled())
@@ -282,7 +321,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
       auto AddrStr = getCurretValueInReg(RegName);
       if (AddrStr == "") {
-        AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TRI);
+        AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TII, *TRI);
       }
 
       if (AddrStr != "") {
@@ -383,7 +422,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
         SrcValStr = getCurretValueInReg(SrcRegName);
         if(SrcValStr == "")
         {
-          SrcValStr = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TRI);
+          SrcValStr = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TII, *TRI);
         }
       }
       else if(DestSrc.Source->isImm())
@@ -395,7 +434,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       auto AddrStr = getCurretValueInReg(RegName);
       if(AddrStr == "")
       {
-        AddrStr = getEqRegValue(const_cast<MachineInstr*>(&MI), Reg, *TRI);
+        AddrStr = getEqRegValue(const_cast<MachineInstr*>(&MI), Reg, *TII, *TRI);
       }
 
       if(AddrStr != "" && SrcValStr != "")
@@ -524,7 +563,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
           auto srcRegVal = getCurretValueInReg(SrcRegStr);
           if(srcRegVal == "")
           {
-            srcRegVal = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TRI);
+            srcRegVal = getEqRegValue(const_cast<MachineInstr*>(&MI), SrcReg, *TII, *TRI);
             if(srcRegVal == "")
             {
               invalidateRegVal(RegName);
@@ -540,7 +579,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
             // TO DO: Machine Instr at the beginning of basic block
             if(MI.getIterator() != MI.getParent()->begin())
             {
-              srcRegVal = getEqRegValue(const_cast<MachineInstr*>(&*std::prev(MI.getIterator())), Reg, *TRI);
+              srcRegVal = getEqRegValue(const_cast<MachineInstr*>(&*std::prev(MI.getIterator())), Reg, *TII, *TRI);
               if(srcRegVal == "")
               {
                 invalidateRegVal(RegName);
@@ -627,7 +666,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
           auto srcRegVal = getCurretValueInReg(SrcRegStr);
           if (srcRegVal == "") {
             srcRegVal =
-                getEqRegValue(const_cast<MachineInstr *>(&MI), SrcReg, *TRI);
+                getEqRegValue(const_cast<MachineInstr *>(&MI), SrcReg, *TII, *TRI);
             if (srcRegVal == "")
             {
               invalidateRegVal(RegName);
@@ -644,7 +683,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               // TO DO: Check if this is right in all situations
               srcRegVal = getEqRegValue(
                   const_cast<MachineInstr *>(&*std::prev(MI.getIterator())),
-                  Reg, *TRI);
+                  Reg, *TII, *TRI);
               if (srcRegVal == "") {
                 invalidateRegVal(RegName);
                 dump();
@@ -659,6 +698,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
           uint64_t Addr;
           std::istringstream(srcRegVal) >> std::hex >> Addr;
+          uint64_t PrevVal = Addr;
           Addr += static_cast<uint64_t>(*DestSrc.SrcOffset);
           if(CATI->isPCRegister(SrcRegStr))
           {
@@ -672,7 +712,11 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
               // TO DO: Check if getInstSize returns None some times
               LLVM_DEBUG(llvm::dbgs() << "Couldn't get size of instruction "
                 << MI << "\n";);
-                invalidateRegVal(RegName);
+                // We know prev reg val, because of reg eq
+                if(DestSrc.Source->getReg() == Reg)
+                  writeUIntRegVal(RegName, PrevVal, regVal.size() - 2);
+                else  
+                  invalidateRegVal(RegName);
                 dump();
                 continue;
             }
@@ -684,7 +728,11 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
           lldb::SBError error;
           MemWrapper.WriteMemory(Addr, &Val, byteSize, error);
-          invalidateRegVal(RegName);
+          // We know prev reg val, because of reg eq
+          if(DestSrc.Source->getReg() == Reg)
+            writeUIntRegVal(RegName, PrevVal, regVal.size() - 2);
+          else
+            invalidateRegVal(RegName);
           dump();
           continue;
         }
