@@ -1,4 +1,4 @@
-# llvm-crash-analyzer
+# crash-analyzer
 
 Let’s analyse the crash of your program!
 The llvm-crash-analyzer tool is designed to observe/triage crash root from your program && as an outcome it will point to a blame function && machine instruction && line of source code of the problematic piece of the program.
