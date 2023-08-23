@@ -187,6 +187,9 @@ bool llvm::crash_analyzer::operator<(const TaintInfo &T1, const TaintInfo &T2) {
   auto Tup1 = T1.getTuple();
   auto Tup2 = T2.getTuple();
   if (std::get<0>(Tup1) == std::get<0>(Tup2)) {
+    // Check if memory address exists, if so, we can compare them.
+    // if(std::get<0>(Tup1) == 2 && T1.IsTaintMemAddr() && T2.IsTaintMemAddr())
+    //   return T1.GetTaintMemAddr() < T2.GetTaintMemAddr();
     if (std::get<1>(Tup1) == std::get<1>(Tup2)) {
       return std::get<2>(Tup1) < std::get<2>(Tup2);
     }
