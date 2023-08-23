@@ -134,6 +134,8 @@ void TaintDataFlowGraph::findBlameFunction(Node *v) {
               // Do not erase potential blame nodes.
               if (a->TaintOp.DerefLevel == 0 && a->IsContant)
                 break;
+              if(a->TaintOp.DerefLevel != adjNode->TaintOp.DerefLevel)
+                continue;
               if (a->MI->getParent() == adjNode->MI->getParent() &&
                   !a->CallMI && !adjNode->CallMI) {
                 if (MDT->dominates(adjNode->MI, a->MI)) {
