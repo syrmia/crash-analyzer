@@ -222,8 +222,16 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg, 
       if (RegOffset.RegNum == Reg.id())
         continue;
       if (RegOffset.IsDeref) {
-        std::string EqRegName = TRI.getRegAsmName(RegOffset.RegNum).lower();
-        auto BaseStr = getCurretValueInReg(EqRegName);
+        std::string BaseStr = "";
+        // rip register
+        if(RegOffset.RegNum == 0)
+          BaseStr = "0";
+        else
+        {
+          std::string EqRegName = TRI.getRegAsmName(RegOffset.RegNum).lower();
+          BaseStr = getCurretValueInReg(EqRegName);
+        }
+         
         if (BaseStr != "") {
           uint64_t BaseAddr = 0;
           std::stringstream SS;
@@ -241,6 +249,7 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg, 
             SS.clear();
             SS << std::hex << *ValOpt;
             SS >> RetVal;
+            RetVal = "0x" + RetVal;
             break;
           }
         }
@@ -280,6 +289,7 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg, 
                 SS.clear();
                 SS << std::hex << *ValOpt;
                 SS >> RetVal;
+                RetVal = "0x" + RetVal;
                 // llvm::dbgs() << BaseStr << ":" << RetVal << "\n";
               }
             }
@@ -322,6 +332,14 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       auto AddrStr = getCurretValueInReg(RegName);
       if (AddrStr == "") {
         AddrStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TII, *TRI);
+        // We could return the value to the register!
+        if(AddrStr != "")
+        {
+          uint64_t Addr = 0;
+          std::istringstream(AddrStr) >> std::hex >> Addr;
+
+          writeUIntRegVal(RegName, Addr, AddrStr.size() - 2);
+        }
       }
 
       if (AddrStr != "") {
