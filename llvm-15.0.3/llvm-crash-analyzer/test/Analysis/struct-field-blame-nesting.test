@@ -45,10 +45,6 @@
 
 # RUN: %llvm-crash-analyzer --print-potential-crash-cause-loc --core-file=%S/Inputs/core.struct-field-blame-nesting %S/Inputs/struct-field-blame-nesting.out < %s 2>&1 | FileCheck %s
 
-# XFAIL: *
-
-## We have memory location clobbered here. Not sure how we will approach
-## with this problem.
 
 ## (gdb) bt
 ## #0  0x00000000004005e6 in print_info (tr=0x7fffb2209920) at test.c:17

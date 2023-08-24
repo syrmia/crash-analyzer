@@ -1442,6 +1442,7 @@ TargetInstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
   return None;
 }
 
-int TargetInstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Optional<int64_t> Offset) const {
+int TargetInstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
+                                 Optional<int64_t> Offset) const {
   return 0;
 }
