@@ -672,7 +672,8 @@ public:
 
   // Doesn't report for add immediate instructions,
   // they are covered by isAddImmediate function
-  int isAddToDest(const MachineInstr &MI, MachineOperand *MO, Optional<int64_t> Offset) const override;
+  int isAddToDest(const MachineInstr &MI, MachineOperand *MO,
+                  Optional<int64_t> Offset) const override;
 };
 
 } // namespace llvm

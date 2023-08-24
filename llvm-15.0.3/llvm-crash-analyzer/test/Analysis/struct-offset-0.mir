@@ -1,9 +1,5 @@
 ##include <stdio.h>
 # 
-# The bad pointer is a field within struct
-# Taint is lost when propagating across function boundaries.
-# Currently it is XFAIL, but this should be fixed. 
- 
 #typedef struct node {
 #  char *x;
 #  int *val;
@@ -26,7 +22,6 @@
 
 # RUN: %llvm-crash-analyzer-ta %s | FileCheck %s
 
-# XFAIL: *
 # CHECK: Blame Function is func1 
 
 --- |

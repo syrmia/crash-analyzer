@@ -134,7 +134,7 @@ void TaintDataFlowGraph::findBlameFunction(Node *v) {
               // Do not erase potential blame nodes.
               if (a->TaintOp.DerefLevel == 0 && a->IsContant)
                 break;
-              if(a->TaintOp.DerefLevel != adjNode->TaintOp.DerefLevel)
+              if (a->TaintOp.DerefLevel != adjNode->TaintOp.DerefLevel)
                 continue;
               if (a->MI->getParent() == adjNode->MI->getParent() &&
                   !a->CallMI && !adjNode->CallMI) {
@@ -186,7 +186,8 @@ bool TaintDataFlowGraph::printBlameFunction(
   LLVM_DEBUG(llvm::dbgs() << "Blame Nodes:\n";
              auto &BlameNodes = blameNodes[MaxLevel];
 
-             for (auto &a : BlameNodes) {
+             for (auto &a
+                  : BlameNodes) {
                // Only consider Node if it's DerefLevel is zero.
                if (a->TaintOp.DerefLevel != 0)
                  continue;

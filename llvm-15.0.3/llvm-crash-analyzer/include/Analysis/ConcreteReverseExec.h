@@ -77,7 +77,8 @@ public:
       MachineFunction::RegisterCrashInfo *CurrentRegisterValues) {
     this->CurrentRegisterValues = CurrentRegisterValues;
   }
-  std::string getEqRegValue(MachineInstr *MI, Register &Reg, const TargetInstrInfo &TII,
+  std::string getEqRegValue(MachineInstr *MI, Register &Reg,
+                            const TargetInstrInfo &TII,
                             const TargetRegisterInfo &TRI);
 };
 

@@ -4633,7 +4633,7 @@ Optional<RegImmPair> X86InstrInfo::isAddImmediate(const MachineInstr &MI,
     // $eax = ADD32ri8 $eax(tied-def 0), 1
     Offset = Sign * MI.getOperand(2).getImm();
     return RegImmPair{MI.getOperand(1).getReg(), Offset};
-  
+
   case X86::SUB8i8:
   case X86::SUB16i16:
   case X86::SUB32i32:
@@ -4647,7 +4647,6 @@ Optional<RegImmPair> X86InstrInfo::isAddImmediate(const MachineInstr &MI,
     Offset = Sign * MI.getOperand(0).getImm();
     return RegImmPair{MI.getOperand(1).getReg(), Offset};
   }
-
 }
 
 static unsigned getLoadStoreRegOpcode(Register Reg,
@@ -11278,62 +11277,63 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
 
 // Doesn't report for add immediate to reg instructions,
 // they are covered by isAddImmediate function
-int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand* MO, Optional<int64_t> Offset) const
-{
-  if(Offset.hasValue()){
-    if(!MO || MI.getNumOperands() < 4 || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg() 
-    || !MI.getOperand(3).isImm() || MI.getOperand(3).getImm() != *Offset)
+int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
+                              Optional<int64_t> Offset) const {
+  if (Offset.hasValue()) {
+    if (!MO || MI.getNumOperands() < 4 || !MI.getOperand(0).isReg() ||
+        !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg() ||
+        !MI.getOperand(3).isImm() || MI.getOperand(3).getImm() != *Offset)
+      return 0;
+  } else {
+    if (!MO || MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() ||
+        !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
+      return 0;
+  }
+  switch (MI.getOpcode()) {
+  default:
     return 0;
-  }
-  else{
-    if(!MO || MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() || !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
-      return 0;
-  }
-  switch(MI.getOpcode()){
-    default:
-      return 0;
-    case X86::SUB8rm:
-    case X86::SUB8rr:
-    case X86::SUB8mr:
-    case X86::SUB8mi:
-    case X86::SUB8mi8:
-    case X86::SUB16rm:
-    case X86::SUB16rr:
-    case X86::SUB16mr:
-    case X86::SUB16mi:
-    case X86::SUB16mi8:
-    case X86::SUB32rm:
-    case X86::SUB32rr:
-    case X86::SUB32mr:
-    case X86::SUB32mi:
-    case X86::SUB32mi8:
-    case X86::SUB64rm:
-    case X86::SUB64rr:
-    case X86::SUB64mr:
-    case X86::SUB64mi32:
-    case X86::SUB64mi8:
-      return -1;
-    case X86::ADD8rm:
-    case X86::ADD8rr:
-    case X86::ADD8mr:
-    case X86::ADD8mi:
-    case X86::ADD8mi8:
-    case X86::ADD16rm:
-    case X86::ADD16rr:
-    case X86::ADD16mr:
-    case X86::ADD16mi:
-    case X86::ADD16mi8:
-    case X86::ADD32rm:
-    case X86::ADD32rr:
-    case X86::ADD32mr:
-    case X86::ADD32mi:
-    case X86::ADD32mi8:
-    case X86::ADD64rm:
-    case X86::ADD64rr:
-    case X86::ADD64mr:
-    case X86::ADD64mi32:
-    case X86::ADD64mi8:
-      return 1;
+  case X86::SUB8rm:
+  case X86::SUB8rr:
+  case X86::SUB8mr:
+  case X86::SUB8mi:
+  case X86::SUB8mi8:
+  case X86::SUB16rm:
+  case X86::SUB16rr:
+  case X86::SUB16mr:
+  case X86::SUB16mi:
+  case X86::SUB16mi8:
+  case X86::SUB32rm:
+  case X86::SUB32rr:
+  case X86::SUB32mr:
+  case X86::SUB32mi:
+  case X86::SUB32mi8:
+  case X86::SUB64rm:
+  case X86::SUB64rr:
+  case X86::SUB64mr:
+  case X86::SUB64mi32:
+  case X86::SUB64mi8:
+    return -1;
+  case X86::ADD8rm:
+  case X86::ADD8rr:
+  case X86::ADD8mr:
+  case X86::ADD8mi:
+  case X86::ADD8mi8:
+  case X86::ADD16rm:
+  case X86::ADD16rr:
+  case X86::ADD16mr:
+  case X86::ADD16mi:
+  case X86::ADD16mi8:
+  case X86::ADD32rm:
+  case X86::ADD32rr:
+  case X86::ADD32mr:
+  case X86::ADD32mi:
+  case X86::ADD32mi8:
+  case X86::ADD64rm:
+  case X86::ADD64rr:
+  case X86::ADD64mr:
+  case X86::ADD64mi32:
+  case X86::ADD64mi8:
+    return 1;
   }
 }
 
