@@ -253,6 +253,16 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
       } else {
         std::string EqRegName = TRI.getRegAsmName(RegOffset.RegNum).lower();
         RetVal = getCurretValueInReg(EqRegName);
+        if(RegOffset.Offset)
+        {
+          uint64_t RetValNum = 0;
+          std::istringstream(RetVal) >> std::hex >> RetValNum;
+          RetValNum += RegOffset.Offset;
+          std::stringstream SS;
+          SS << std::hex << RetValNum;
+          SS >> RetVal;
+          RetVal = "0x" + RetVal; 
+        }
         if (RetVal != "")
           break;
       }
