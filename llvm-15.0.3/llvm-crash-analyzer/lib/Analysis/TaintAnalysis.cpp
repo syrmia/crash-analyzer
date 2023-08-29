@@ -247,8 +247,6 @@ crash_analyzer::TaintAnalysis::TaintAnalysis(
       Start = End + 1;
       End = TestChangedAdressValues.find(",", Start);
       if (!is_number(TestChangedAdressValues.substr(Start, End - Start))) {
-        // std::cout << stringToTokenize.substr(start, end - start) << " is not
-        // a number!" << std::endl;
         LLVM_DEBUG(dbgs() << TestChangedAdressValues.substr(Start, End - Start)
                           << " adr is not a number!\n");
         break;
@@ -814,10 +812,6 @@ TaintInfo crash_analyzer::TaintAnalysis::isTainted(
             && (Op.Offset || MI->isCall()))
             || 
               (!itr->Offset))
-            // auto TRI = MI->getMF()->getSubtarget().getRegisterInfo();
-            // if( TRI->getRegAsmName(Op.Op->getReg()).lower() != "rax" 
-            // ||  TRI->getRegAsmName(itr->Op->getReg()).lower() != "rbp"
-            // ||  Op.Offset)
             return *itr;
           }
       }
