@@ -14,11 +14,9 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mem-wrapper"
 
-// Work with write memory, maybe?
 
 crash_analyzer::MemoryWrapper::MemoryWrapper() {}
 
-// Little endian
 Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
     uint64_t addr, uint32_t byte_size, lldb::SBError &error) {
 
@@ -174,7 +172,6 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
     alignmentOffset = 0;
   }
 
-  // Little endian
 
   alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   alignedAddr = addr - alignmentOffset;
@@ -183,12 +180,10 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
     if (size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) {
       for (uint32_t j = 0; j < NUM_OF_BYTES_PER_ADDRESS - alignmentOffset;
            j++) {
-        // Val <<= 8;
         Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
       }
     } else {
       for (uint32_t j = 0; j < size - i; j++) {
-        // Val <<= 8;
         Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
       }
     }
