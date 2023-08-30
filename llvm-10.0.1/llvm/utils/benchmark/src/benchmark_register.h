@@ -5,7 +5,6 @@
 
 #include "check.h"
 
-//Added
 #include <limits>
 
 template <typename T>

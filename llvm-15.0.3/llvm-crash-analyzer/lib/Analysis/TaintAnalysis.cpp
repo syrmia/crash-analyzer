@@ -2003,7 +2003,7 @@ bool crash_analyzer::TaintAnalysis::runOnBlameModule(BlameModule &BM) {
   if (!MirDotFileName.empty()) {
     TaintDFG.printAsDOT(MirDotFileName.str());
   }
-
+  
   TaintDFG.dump();
 
   // Dump user friendly DFG.

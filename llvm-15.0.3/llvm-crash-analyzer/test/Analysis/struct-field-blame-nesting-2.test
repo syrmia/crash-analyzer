@@ -35,13 +35,14 @@
 
 
 # RUN: %llvm-crash-analyzer -debug-only=taint-analysis \
-# RUN: --core-file=%S/Inputs/core.struct-field-blame-segfault \ 
-# RUN: %S/Inputs/struct-field-blame-segfault.out < %s 2>&1 | FileCheck %s
+# RUN: --core-file=%S/Inputs/core.struct-field-blame-nesting-2 \ 
+# RUN: %S/Inputs/struct-field-blame-nesting-2.out < %s 2>&1 | FileCheck %s
 
 # XFAIL: *
 
-## Segfaults during decompiling on demand of function __vfprintf_internal on function getCurretValueInReg on the version with MemWrapper
-## Segfaults during decompiling on demand of function __vfprintf_internal on function getEqRegsAfterMI on the version without MemWrapper
+## No longer segfaults, it just doesn't support some operations, 
+## in this case it is OR64mi8, ENDBR64, TEST8ri, CMP64rr, NOOPW, 
+## CMP8i8, CDQE, NOOPL, CMP8ri in decompiled on demand funs
 
 # CHECK: Blame Function is func1
 # CHECK: From File {{.*}}:26
