@@ -112,7 +112,7 @@ public:
   }
 
   // Handle General Purpose Registers.
-  FrameToRegsMap &getGRPsFromFrame() { return GPRs; }
+  FrameToRegsMap &getGPRsFromFrame() { return GPRs; }
   void insertIntoGPRsFromFrame(llvm::StringRef frame, std::vector<RegInfo> &Regs) {
     GPRs.insert(std::make_pair(frame, Regs));
   }
@@ -126,6 +126,8 @@ public:
   unsigned getNumOfFrames() { return NumOfFrames; }
 
   lldb::SBTarget &getTarget() { return target; }
+
+  lldb::SBProcess &getProcess() { return process; }
 };
 
 } // namespace lldb_crash_analyzer

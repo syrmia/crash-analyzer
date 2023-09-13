@@ -22,7 +22,7 @@ void ConcreteReverseExec::dump() {
   LLVM_DEBUG(llvm::dbgs() << "\n****Concrete Register Values For Function: "
                           << mf->getName() << "\n";
              for (const auto &R
-                  : currentRegisterValues) {
+                  : *CurrentRegisterValues) {
                if (R.Value != "")
                  llvm::dbgs() << R.Name << ": " << R.Value << "\n";
                else
@@ -34,7 +34,7 @@ void ConcreteReverseExec::dump() {
 void ConcreteReverseExec::dump2() {
   llvm::dbgs() << "\n****Concrete Register Values For Function: "
                << mf->getName() << "\n";
-  for (const auto &R : currentRegisterValues) {
+  for (const auto &R : *CurrentRegisterValues) {
     if (R.Value != "")
       llvm::dbgs() << R.Name << ": " << R.Value << "\n";
     else
@@ -51,7 +51,7 @@ bool ConcreteReverseExec::getIsCREEnabled() const {
 
 // TODO: Optimize this.
 void ConcreteReverseExec::updateCurrRegVal(std::string Reg, std::string Val) {
-  for (auto &R : currentRegisterValues) {
+  for (auto &R : *CurrentRegisterValues) {
     if (R.Name == Reg) {
       if (Val == "") {
         R.Value = "";
@@ -122,7 +122,7 @@ void ConcreteReverseExec::updateCurrRegVal(std::string Reg, std::string Val) {
 }
 
 std::string ConcreteReverseExec::getCurretValueInReg(const std::string &Reg) {
-  for (auto &R : currentRegisterValues) {
+  for (auto &R : *CurrentRegisterValues) {
     if (R.Name == Reg)
       return R.Value;
   }

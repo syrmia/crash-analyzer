@@ -44,6 +44,7 @@
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
 
+#include <map>
 #include <sstream>
 #include <unordered_set>
 
@@ -236,6 +237,83 @@ MachineFunction &crash_analyzer::Decompiler::createMF(StringRef FunctionName) {
   return *MF;
 }
 
+MachineBasicBlock *
+crash_analyzer::Decompiler::splitMachineBasicBlock(MachineInstr *MI) {
+
+  // A parent of a destination of a jump.
+  MachineBasicBlock *FromMBB = MI->getParent();
+
+  // A machine function that contains a destination of a jump.
+  MachineFunction *MF = FromMBB->getParent();
+
+  // A new block which will contain instructions in the second half of FromMBB.
+  // It will contain a MI and those instructions after MI.
+  MachineBasicBlock *SplitBB =
+      MF->CreateMachineBasicBlock(FromMBB->getBasicBlock());
+
+  // Insert the new block into a MF after a FromMBB.
+  MF->insert(++MachineFunction::iterator(FromMBB), SplitBB);
+
+  // Move all the instructions starting from a MI into a new block.
+  SplitBB->splice(SplitBB->begin(), FromMBB, MachineBasicBlock::iterator(MI),
+                  FromMBB->end());
+
+  // Transfer all successors of a FromMBB to a SplitBB.
+  SplitBB->transferSuccessors(FromMBB);
+
+  // Fix up any PHI nodes in the successor.
+  for(auto Succ : SplitBB->successors()){
+    Succ->replacePhiUsesWith(FromMBB, SplitBB);
+  }
+
+  // The new block is a new successor of a FromMBB.
+  FromMBB->addSuccessor(SplitBB);
+
+  // Return the new block.
+  return SplitBB;
+}
+
+void crash_analyzer::Decompiler::updateBackwardBranch(
+    std::map<uint64_t, MachineInstr *> &JumpTargets, uint64_t TargetBBAddr,
+    MachineInstr *MI) {
+
+  // Find a MachineInstr which a jump refers to and check if it exists.
+  auto JumpTarget = JumpTargets.find(TargetBBAddr);
+  assert(JumpTarget != JumpTargets.end() &&
+         "Target of branch instruction should have already been decompiled.");
+
+  // The destination of a jump and its parent.
+  MachineInstr *MITarget = JumpTarget->second;
+  MachineBasicBlock *MITargetMBB = MITarget->getParent();
+
+  // The (possibly newly inserted) parent of the destination of a jump.
+  MachineBasicBlock *TargetMBB;
+
+  // If a MITarget has a predecessor, split a MITargetMBB into two blocks.
+  if (&*MITargetMBB->begin() != MITarget) {
+    // Move all the instructions starting from a MITarget into a new basic
+    // block. This is the similar method as a method MachineBasicBlock::splitAt,
+    // but it doesn't normalize probabilities of successors because that
+    // normalization leads to mixing of known and unknown probabilities, which
+    // is unacceptable.
+    TargetMBB = splitMachineBasicBlock(MITarget);
+  } else {
+    // A MITarget hasn't a predecessor, so a MITargetMBB doesn't need to
+    // be splitted.
+    TargetMBB = MITargetMBB;
+  }
+
+  // Update a MI so that it jumps to a destination basic block (TargetMBB).
+  // FIXME: Should call RemoveOperand(0) and then set it to the TargetMBB.
+  MI->getOperand(0) = MachineOperand::CreateMBB(TargetMBB);
+
+  // Update the successors set of a MI's parent.
+  MachineBasicBlock *MIParent = MI->getParent();
+  if (!MIParent->isSuccessor(TargetMBB)) {
+    MIParent->addSuccessor(TargetMBB);
+  }
+}
+
 bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
     Triple TheTriple, lldb::SBInstructionList &Instructions,
     lldb::SBAddress &FuncStart, lldb::SBAddress &FuncEnd,
@@ -258,6 +336,11 @@ bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
   // Jumps to be updated with proper targets ( in form of bb).
   // This maps the target address with the jump.
   std::unordered_multimap<uint64_t, MachineInstr *> BranchesToUpdate;
+
+  // This maps the InstAddr to the decoded MIR instruction.
+  // This map is used for a backward branch update.
+  // It is assumed that this case occurs when the loops exist.
+  std::map<uint64_t, MachineInstr *> JumpTargets;
 
   std::pair<lldb::addr_t, lldb::addr_t> FuncRange{FuncStart.GetFileAddress(),
                                                   FuncEnd.GetFileAddress()};
@@ -317,13 +400,13 @@ bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
 
     // Fill the Machine Function.
     if (MF) {
-      // If it is not a branch and we previously did not decompile a
-      // branch,
-      // check if this should start a new basic block. For example
-      // default:
-      // label within a switch usually has this structure.
-      if (!MCID.isBranch() && BranchesToUpdate.count(Addr.Address) &&
-          !PrevBranch) {
+      // If an address of a current instruction (Addr.Address) is the
+      // destination of some branch that was decompiled, we create a new
+      // basic block. For example, a default label within a switch usually
+      // has this structure. If a branch was previously decompiled (PrevBranch
+      // == true), the new basic block was already created (look at the code
+      // below).
+      if (BranchesToUpdate.count(Addr.Address) && !PrevBranch) {
         MachineBasicBlock *OldBB = MBB;
         MBB = MF->CreateMachineBasicBlock();
         if (!OldBB->isSuccessor(MBB))
@@ -353,6 +436,9 @@ bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
                       DefinedRegs, FuncStartSymbols, Target);
 
       assert(MI && "Failed to add the instruction ...");
+
+      // Remember which MachineInstr does the Addr.Address refer to.
+      JumpTargets.insert({Addr.Address, MI});
 
       // We maintain mapping between MI and its PC address, since TII for
       // x86 doesn't support MI size getter. For x86, instructions with the
@@ -403,7 +489,14 @@ bool crash_analyzer::Decompiler::DecodeIntrsToMIR(
       //    JMP64r $r10
       if (MI->getOperand(0).isImm()) {
         uint64_t TargetBBAddr = MI->getOperand(0).getImm();
-        BranchesToUpdate.insert({TargetBBAddr, MI});
+        // If a TargetBBAddr is before Addr.Address, it is propably a jump to
+        // a loop condition or a jump to a loop body beginning. A special case
+        // when TargetBBAddr == Addr.Address is something like 'while(true);'.
+        if (TargetBBAddr <= Addr.Address) {
+          updateBackwardBranch(JumpTargets, TargetBBAddr, MI);
+        } else {
+          BranchesToUpdate.insert({TargetBBAddr, MI});
+        }
       }
       PrevBranch = true;
     } else

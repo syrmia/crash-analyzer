@@ -44,6 +44,8 @@ enum TaintInfoType { ImmediateVal, RegisterLoc, MemoryLoc };
 //   2) Scaled Index addressing mode
 struct TaintInfo {
   const MachineOperand *Op = nullptr;
+  MachineOperand *Scale = nullptr;
+  MachineOperand *IndexReg = nullptr;
 
   // For mem operands, we rather choose to taint
   // real/concrete addresses (by calculating base_reg + off).
@@ -162,6 +164,27 @@ public:
   ConcreteReverseExec *getCRE() const;
   void setREAnalysis(RegisterEquivalence *rea);
   RegisterEquivalence *getREAnalysis();
+  /// This is a structure that is used as an element of a queue which determines
+  /// the order of visiting MachineBasicBlocks during taint analysis.
+  /// It contains a MachineBasicBlock which should be visited and its successors
+  /// through which it was reached during revese execution of instructions.
+  /// In general, a MachineBasicBlock should have a maximum of two successors,
+  /// because during decompilation after branch instruction it is created a new
+  /// MachineBasicBlock.
+  struct TaintAnalysisQueueElem {
+    MachineBasicBlock *MBB;
+    SmallVector<MachineBasicBlock *, 8> Successors;
+    TaintAnalysisQueueElem(MachineBasicBlock *MBB) : MBB(MBB) {}
+  };
+  /// @brief Merges register values from successors. If two registers with the
+  /// same name have different values in two successors, a value of that
+  /// register is invalidated.
+  /// @param RegVals maps a block into the register values information
+  /// @param QueueElem contains a block that should be processed and its
+  /// successors thorugh which it was reached
+  void mergeRegVals(DenseMap<const MachineBasicBlock *,
+                             MachineFunction::RegisterCrashInfo> &RegVals,
+                    TaintAnalysisQueueElem &QueueElem);
 };
 
 } // namespace crash_analyzer

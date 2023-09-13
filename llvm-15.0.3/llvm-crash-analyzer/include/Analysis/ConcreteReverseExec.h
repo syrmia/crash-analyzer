@@ -29,7 +29,8 @@ using namespace crash_analyzer;
 // that may store.
 class ConcreteReverseExec {
   // This represents current values in the registers.
-  MachineFunction::RegisterCrashInfo currentRegisterValues;
+  // TODO: Add a pointer to current memory locations information.
+  MachineFunction::RegisterCrashInfo *CurrentRegisterValues = nullptr;
   const MachineFunction *mf;
 
   CATargetInfo *CATI;
@@ -42,8 +43,7 @@ class ConcreteReverseExec {
 public:
   // Init the curr reg values with the values from the 'regInfo' attribute,
   // which are the values read from corefile.
-  ConcreteReverseExec(const MachineFunction *MF)
-      : currentRegisterValues(MF->getCrashRegInfo()), mf(MF) {
+  ConcreteReverseExec(const MachineFunction *MF) : mf(MF) {
     CATI = getCATargetInfoInstance();
     if (MF->getCrashRegInfo().size())
       CREEnabled = true;
@@ -62,8 +62,15 @@ public:
   const MachineFunction *getMF() { return mf; }
   bool getIsCREEnabled() const;
 
-  // Reverse execution of the MI by updating the currentRegisterValues.
+  // Reverse execution of the MI by updating the CurrentRegisterValues.
   void execute(const MachineInstr &MI);
+
+  // Updates a pointer to register values when the other block is being
+  // processed.
+  void setCurrentRegisterValues(
+      MachineFunction::RegisterCrashInfo *CurrentRegisterValues) {
+    this->CurrentRegisterValues = CurrentRegisterValues;
+  }
 };
 
 #endif

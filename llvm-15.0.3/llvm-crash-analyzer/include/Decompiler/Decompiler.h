@@ -132,6 +132,24 @@ public:
   MachineInstr *addNoop(MachineFunction *MF, MachineBasicBlock *MBB,
                         DebugLoc *Loc);
 
+  /// This method splits a \p MI's basic block into 2 pieces at \p MI. A new
+  /// block will be inserted after a \p MI's block, and a \p MI and all
+  /// instructions after a \p MI will be moved to it. This method also updates
+  /// successors of new block.
+  ///
+  /// \returns the newly inserted block.
+  MachineBasicBlock *splitMachineBasicBlock(MachineInstr *MI);
+
+  /// This method updates a backward jump. It is assumed that it is
+  /// a jump to a loop condition (for/while loop) or a jump to a loop body
+  /// beginning (do-while loop). It splits the target MachineBasicBlock into 2
+  /// blocks (if a target MachineInstr has a predecessor). \param JumpTargets a
+  /// structure that maps an instruction address to a MachineInstr. \param
+  /// TargetBBAddr the destination of a jump. \param MI an instruction that
+  /// performs a jump.
+  void updateBackwardBranch(std::map<uint64_t, MachineInstr *> &JumpTargets,
+                            uint64_t TargetBBAddr, MachineInstr *MI);
+
   bool
   DecodeIntrsToMIR(Triple TheTriple, lldb::SBInstructionList &Instructions,
                    lldb::SBAddress &FuncStart, lldb::SBAddress &FuncEnd,
