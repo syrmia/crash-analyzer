@@ -23,7 +23,7 @@
 
 # RUN: %llvm-crash-analyzer-ta -debug-only=taint-analysis %s 2>&1 | FileCheck %s
 
-# CHECK: MF: fn
+# CHECK: MF - backward analysis: fn
 
 ## The postorder traversal of the blocks is the following: BB.4-BB.3-BB.2-BB.1-BB.0. This is the consequence of the printed sequence of the successors of the block BB.1.
 ## The postorder traversal visits all children of a node before visiting that node.

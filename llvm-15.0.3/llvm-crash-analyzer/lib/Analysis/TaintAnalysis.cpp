@@ -1604,6 +1604,7 @@ void crash_analyzer::TaintAnalysis::mergeRegVals(
     }
   }
   RegVals[MBB] = NewRegInfo;
+}
 
 // Transform stack memory locations in the TaintList, to use Base Pointer as a
 // base register (callee side), instead of the Stack Pointer (caller side).
