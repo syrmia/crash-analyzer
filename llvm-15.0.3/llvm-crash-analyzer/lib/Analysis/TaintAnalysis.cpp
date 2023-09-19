@@ -50,7 +50,7 @@ static cl::opt<unsigned>
                     cl::desc("Set frame to start tracking target taint info."),
                     cl::value_desc("start_crash_order"), cl::init(0));
 
-// Ukini
+// Used for testing memory changes, it is maybe obsolete now
 static cl::opt<std::string> TestChangedAdressValues(
     "test-changed-address-values",
     cl::desc("Test taint-analysis with changed values in address."),
