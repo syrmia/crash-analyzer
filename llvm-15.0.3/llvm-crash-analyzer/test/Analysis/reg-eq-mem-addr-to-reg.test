@@ -1,0 +1,37 @@
+# Produced with clang++ -g -O0 m.cpp -o m
+
+# void f()
+# {
+#    long x = 1;
+#    long y = 2;
+#    long *px = &x;
+#    long *py = nullptr;
+#
+#    __asm__(
+#        "lea %0, %%rdi;"
+#        "lea %1, %%rsi;"
+#        "movsq;"
+#        : "=m" (px), "=m" (py)
+#        : "0" (px), "1" (py)
+#    );
+#
+#    *px = 10;
+#
+#
+#
+#}
+# int main()
+# {
+#    f();
+#    return 0;
+# }
+
+# This test is used to exploit the workaround for reg-equivalence that doesnt pass
+# taint if the dest op of instruction is a register and is equal to some memory address
+
+# XFAIL: *
+# RUN: %llvm-crash-analyzer --core-file=%S/Inputs/core.reg-eq-mem-addr-to-reg \
+# RUN: %S/Inputs/reg-eq-mem-addr-to-reg --print-potential-crash-cause-loc 2>&1 | FileCheck %s
+
+CHECK: Blame Function is f()
+CHECK-NEXT: From File {{.*}}:6:11

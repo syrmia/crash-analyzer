@@ -1169,7 +1169,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     const MachineOperand *Src = &(MI.getOperand(1));
     return DestSourcePair{*Dest, *Src};
   }
-  //FIXME: Should SUB and ADD instructions have Src2 bc of imm
+  // FIXME: Should SUB and ADD instructions have Src2 bc of imm
   case X86::OR8mi:
   case X86::OR16mi:
   case X86::OR32mi8:
@@ -1228,6 +1228,19 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     }
 
     return DestSourcePair{*Dest, Offset, *Src};
+  }
+  // FIXME: Added this for proving that workaround in isTainted
+  // function doesn't work properly, as this instruction doesn't
+  // use reg + off to address memory, but only rdi and rsi as they
+  // are, there are probably more x86 instructions that could
+  // exploit the workaround. One easy fix for this is to return src
+  // and dest as reg + off, than we would know that it is an mem op,
+  // but I'll leave it like this to expolit the workaround
+  case X86::MOVSQ: {
+    const MachineOperand *Src = &(MI.getOperand(1));
+    const MachineOperand *Dest = &(MI.getOperand(0));
+    return DestSourcePair{*Dest, *Src};
+    break;
   }
   }
 

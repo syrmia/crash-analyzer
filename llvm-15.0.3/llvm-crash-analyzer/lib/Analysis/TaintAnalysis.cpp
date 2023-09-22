@@ -189,7 +189,7 @@ bool llvm::crash_analyzer::operator<(const TaintInfo &T1, const TaintInfo &T2) {
   auto Tup2 = T2.getTuple();
   if (std::get<0>(Tup1) == std::get<0>(Tup2)) {
     // Check if memory address exists, if so, we can compare them.
-    if(std::get<0>(Tup1) == 2 && T1.IsTaintMemAddr() && T2.IsTaintMemAddr())
+    if (std::get<0>(Tup1) == 2 && T1.IsTaintMemAddr() && T2.IsTaintMemAddr())
       return T1.GetTaintMemAddr() < T2.GetTaintMemAddr();
     if (std::get<1>(Tup1) == std::get<1>(Tup2)) {
       return std::get<2>(Tup1) < std::get<2>(Tup2);
@@ -801,19 +801,23 @@ TaintInfo crash_analyzer::TaintAnalysis::isTainted(
           OffsetCurrOp = *itr->Offset;
         if (REAnalysis->isEquivalent(
                 *const_cast<MachineInstr *>(&*std::prev(MI->getIterator())),
-                {itr->Op->getReg(), OffsetCurrOp}, {Op.Op->getReg(), OffsetOp}))
-          {
-            // FIXME: Added this if to make the tests pass for now
-            // as sometimes it is not good to taint register if it
-            // is equal to a tainted mem address
-            // This makes some reg-eqs invalid so this should be changed
+                {itr->Op->getReg(), OffsetCurrOp},
+                {Op.Op->getReg(), OffsetOp})) {
+          // FIXME: Added this if to make the tests pass for now
+          // as sometimes it is not good to taint register if it
+          // is equal to a tainted mem address and for most ins
+          // it would be useless, as we are not writing to memory
+          // but to a register. One of the test that doesn't work
+          // without the workaround is pointer-add-reset-mem.test
+          // as it propagates taint to ppx instead of px. Added an
+          // instruction that uses registers without offsets for mem
+          // addressing to exploit this vulnerability in x86InstrInfo.cpp
+          // getDestAndSrc function
+          // This makes some reg-eqs invalid so this should be changed
 
-            if((itr->Offset
-            && (Op.Offset || MI->isCall()))
-            || 
-              (!itr->Offset))
+          if ((itr->Offset && (Op.Offset || MI->isCall())) || (!itr->Offset))
             return *itr;
-          }
+        }
       }
     }
   }
@@ -1365,7 +1369,6 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
   printTaintList(TL);
   return true;
 }
-
 
 // Simplified version of propagateTaint, but in the oposite (forward) direction.
 // Idea is to track tainted parameters of out-of-the-backtrace calls, from the
@@ -2285,7 +2288,7 @@ bool crash_analyzer::TaintAnalysis::runOnBlameModule(BlameModule &BM) {
   if (!MirDotFileName.empty()) {
     TaintDFG.printAsDOT(MirDotFileName.str());
   }
-  
+
   TaintDFG.dump();
 
   // Dump user friendly DFG.
