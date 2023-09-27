@@ -62,6 +62,8 @@ struct TaintInfo {
   void propagateDerefLevel(const MachineInstr &MI);
 
   bool IsGlobal = false;
+  // Added for differentiating reg + off from memory pointed by (reg)+off
+  bool IsDeref = false;
 
   friend bool operator==(const TaintInfo &T1, const TaintInfo &T2);
   friend bool operator!=(const TaintInfo &T1, const TaintInfo &T2);
