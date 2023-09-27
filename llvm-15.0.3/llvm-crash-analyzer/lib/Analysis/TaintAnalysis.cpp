@@ -524,6 +524,7 @@ bool crash_analyzer::TaintAnalysis::areParamsTainted(
 
     // Check if the register (parameter) is tainted.
     auto Taint = isTainted(Ti, TL, &REAnalysis, CallMI);
+
     if (Taint.Op == nullptr)
       continue;
 
@@ -649,6 +650,8 @@ bool crash_analyzer::TaintAnalysis::isStackSlotTainted(
       MOp.setParent(const_cast<MachineInstr *>(CallMI));
       Ti.Op = new MachineOperand(MOp);
       Ti.Offset = Offset;
+      // TODO: Stack slot represents memory, check if this is right
+      Ti.IsDeref = true;
       // Based on the equivalance $rbp+(-40) : { deref->$rsp },
       // Ti ($rsp + 0) has one DerefLevel below ($rbp+(-40)).
       Ti.DerefLevel = Taint.DerefLevel - 1;
@@ -691,6 +694,13 @@ TaintInfo crash_analyzer::TaintAnalysis::isTainted(
   Empty_op.Op = nullptr;
   Empty_op.Offset = 0;
 
+  // TODO: Same as for propagateTaint function, should check
+  // if this should be added elsewhere and should the
+  // condition be different
+  bool IsDerefOp = false;
+  if(Op.Offset)
+    IsDerefOp = true;
+
   int64_t OffsetOp = 0;
   if (Op.Offset)
     OffsetOp = *Op.Offset;
@@ -706,9 +716,10 @@ TaintInfo crash_analyzer::TaintAnalysis::isTainted(
         if (itr->Offset)
           OffsetCurrOp = *itr->Offset;
         if (REAnalysis->isEquivalent(
-                *const_cast<MachineInstr *>(&*std::prev(MI->getIterator())),
-                {itr->Op->getReg(), OffsetCurrOp},
-                {Op.Op->getReg(), OffsetOp})) {
+                // *const_cast<MachineInstr *>(&*std::prev(MI->getIterator())),
+                *const_cast<MachineInstr *>(MI),
+                {itr->Op->getReg(), OffsetCurrOp, itr->IsDeref},
+                {Op.Op->getReg(), OffsetOp, IsDerefOp})) {
           // FIXME: Added this if to make the tests pass for now
           // as sometimes it is not good to taint register if it
           // is equal to a tainted mem address and for most ins
@@ -720,10 +731,30 @@ TaintInfo crash_analyzer::TaintAnalysis::isTainted(
           // addressing to exploit this vulnerability in x86InstrInfo.cpp
           // getDestAndSrc function
           // This makes some reg-eqs invalid so this should be changed
+          // Changed the if, added IsDeref field to TaintInfo
 
-          if ((itr->Offset && (Op.Offset || MI->isCall())) || (!itr->Offset))
+          // if ((itr->Offset && (Op.Offset || MI->isCall())) || (!itr->Offset))
+          // FIXME: Check if this is right, the first if should somehow check if the instruction
+          // provides reg eq between src and dest as that shouldn't happen if that reg eq is gained
+          // from that instruction, but this works for now.
+          if(REAnalysis->isEquivalent(
+            *const_cast<MachineInstr *>(&*std::prev(MI->getIterator())),
+            {itr->Op->getReg(), OffsetCurrOp, itr->IsDeref},
+            {Op.Op->getReg(), OffsetOp, IsDerefOp}
+          ))  
             return *itr;
         }
+        // For forward analysis call instructions, to check
+        // if we are passing a reference to a function
+        if(MI && MI->isCall() && itr->IsDeref &&
+          REAnalysis->isEquivalent(
+                *const_cast<MachineInstr *>(MI),
+                {itr->Op->getReg(), OffsetCurrOp, false},
+                {Op.Op->getReg(), OffsetOp, IsDerefOp}
+          ))
+          {
+            return *itr;
+          }
       }
     }
   }
@@ -1023,6 +1054,9 @@ void crash_analyzer::TaintAnalysis::startTaint(
       if (!DS.DestIndexReg) {
         DestTi.Op = DS.Destination;
         DestTi.Offset = DS.DestOffset;
+        // If it has offset then it is dereferenced memory
+        if(DestTi.Offset)
+          DestTi.IsDeref = true;
         calculateMemAddr(DestTi);
         handleGlobalVar(DestTi);
         addNewTaint(DestTi, TL, MI, TaintDFG, crashNode);
@@ -1054,6 +1088,11 @@ void crash_analyzer::TaintAnalysis::startTaint(
       if (!DS.SrcIndexReg) {
         SrcTi.Op = DS.Source;
         SrcTi.Offset = DS.SrcOffset;
+        // If it has offset then it is dereferenced memory, except
+        // LEA instruction
+        auto TII = MI.getMF()->getSubtarget().getInstrInfo();
+        if(SrcTi.Offset && !TII->isLEAInstr(MI))
+          SrcTi.IsDeref = true;
         calculateMemAddr(SrcTi);
         handleGlobalVar(SrcTi);
         addNewTaint(SrcTi, TL, MI, TaintDFG, crashNode);
@@ -1084,6 +1123,10 @@ void crash_analyzer::TaintAnalysis::startTaint(
       if (!DS.SrcIndexReg) {
         Src2Ti.Op = DS.Source2;
         Src2Ti.Offset = DS.Src2Offset;
+        // If it has offset then it is dereferenced memory
+        if(Src2Ti.Offset)
+          Src2Ti.IsDeref = true;
+
         calculateMemAddr(Src2Ti);
         handleGlobalVar(Src2Ti);
         addNewTaint(Src2Ti, TL, MI, TaintDFG, crashNode);
@@ -1129,6 +1172,13 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
   TaintInfo SrcTi, Src2Ti, DestTi;
   SrcTi.Op = DS.Source;
   SrcTi.Offset = DS.SrcOffset;
+  // TODO: Should check if this should be added elsewhere
+  // and also check if the condition needs to be updated
+  auto TII = MI.getMF()->getSubtarget().getInstrInfo();
+  if(SrcTi.Offset && !TII->isLEAInstr(MI))
+  {
+    SrcTi.IsDeref = true;
+  }
   if (SrcTi.Offset)
     calculateMemAddr(SrcTi);
 
@@ -1152,7 +1202,7 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
   auto Taint = isTainted(DestTi, TL, &REAnalysis, &MI);
 
   const auto &MF = MI.getParent()->getParent();
-  auto TII = MF->getSubtarget().getInstrInfo();
+  // auto TII = MF->getSubtarget().getInstrInfo();
   // Check if DestTi is explicitly set as a starting point.
   if (DestTi.Op && DestTi.isTargetStartTaint(MF->getCrashOrder())) {
     insertTaint(DS, TL, MI, TaintDFG, REAnalysis);
@@ -1285,9 +1335,17 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaintFwd(
 
   if (!SrcTi.Op)
     return true;
-
+  
   const auto &MF = MI.getParent()->getParent();
   auto TII = MF->getSubtarget().getInstrInfo();
+
+  // TODO: Should check if this should be added elsewhere
+  // and also check if the condition needs to be updated
+  if(SrcTi.Offset && !TII->isLEAInstr(MI))
+    SrcTi.IsDeref = true;
+  
+  if(DestTi.Offset)
+    DestTi.IsDeref = true;
 
   auto DestTaint = isTainted(DestTi, TL, &REAnalysis, &MI);
   // FIXME: Define better terminating criteria for forward analysis?
@@ -1334,12 +1392,14 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaintFwd(
   // Propagate dereference level (from crash) from the Taint to the DestTi.
   // This propagation is in the forwards direction.
   DestTi.DerefLevel = Taint.DerefLevel;
+  if(Taint.Op->isReg() && SrcTi.Op->isReg() && SrcTi.IsDeref == Taint.IsDeref)
+  {
   // Inverse DestTi.propagateDerefLevel(MI);
   if (TII->isStore(MI))
     DestTi.DerefLevel -= 1;
   else if (TII->isLoad(MI))
     DestTi.DerefLevel += 1;
-
+  }
   // Add new TaintDFG node for the DestTi.
   if (addToTaintList(DestTi, TL)) {
     Node *newNode = new Node(MF->getCrashOrder(), &MI, DestTi, false);
