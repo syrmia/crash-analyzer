@@ -92,6 +92,7 @@ private:
 
   // Used for functions out of the backtrace.
   SmallVector<TaintInfo, 8> TL_Of_Call;
+
 public:
   TaintAnalysis(StringRef TaintDotFileName, StringRef MirDotFileName,
                 bool PrintPotentialCrashCauseLocation);
