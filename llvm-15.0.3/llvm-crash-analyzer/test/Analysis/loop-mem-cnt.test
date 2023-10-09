@@ -16,11 +16,13 @@
 #}
 
 
-
+# Added another line for printing the line of crash as it shows a wrong line
 # RUN: %llvm-crash-analyzer --core-file=%S/Inputs/core.loop-mem-cnt \
+# RUN: --print-potential-crash-cause-loc \
 # RUN:     %S/Inputs/loop-mem-cnt < %s 2>&1 | FileCheck %s
 
 # CHECK: Blame Function is f
+# CHECK: From File {{.*}}:6
 # XFAIL: *
 
 

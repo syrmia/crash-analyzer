@@ -82,5 +82,5 @@ if [ $? -eq 0 ]; then
 
 	echo -e "\n\nFinished\n\n";
 else
-	echo -e "\n\nCMake Failed!\n\n";
+	echo -e "\n\nFailed!\n\n";
 fi

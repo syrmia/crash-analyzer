@@ -1354,7 +1354,14 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
 
   // Propagate dereference level (from crash) from the Taint to the SrcTi.
   SrcTi.DerefLevel = Taint.DerefLevel;
-  SrcTi.propagateDerefLevel(MI);
+  // TO DO: Check if this if should be here, 
+  // checks if register equivalence or mem equality played a role in comparison
+  // comparing a reg with mem location which messes with deref lvls, 
+  // only let if reg = reg + 0
+  if(Taint.Offset.hasValue() == DestTi.Offset.hasValue() || 
+  (Taint.Op->isReg() && DestTi.Op->isReg() && Taint.Op->getReg() == DestTi.Op->getReg() && 
+  ((Taint.Offset && *Taint.Offset == 0)  || (DestTi.Offset && *DestTi.Offset == 0))))
+    SrcTi.propagateDerefLevel(MI);
 
   // FIXME: Since now we have corefile content we can check if this constant
   // is the same from the crash point, and by doing that we avoid FALSE

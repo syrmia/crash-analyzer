@@ -21,14 +21,22 @@ static cl::opt<bool> DisableCRE("disable-cre",
 void ConcreteReverseExec::dump() {
   LLVM_DEBUG(llvm::dbgs() << "\n****Concrete Register Values For Function: "
                           << mf->getName() << "\n";
-             for (const auto &R
-                  : *CurrentRegisterValues) {
-               if (R.Value != "")
-                 llvm::dbgs() << R.Name << ": " << R.Value << "\n";
-               else
-                 llvm::dbgs() << R.Name << ": "
-                              << "<not available>\n";
-             });
+              if(CurrentRegisterValues)
+              {
+                for (const auto &R
+                    : *CurrentRegisterValues) {
+                  if (R.Value != "")
+                    llvm::dbgs() << R.Name << ": " << R.Value << "\n";
+                  else
+                    llvm::dbgs() << R.Name << ": "
+                                << "<not available>\n";
+                }
+              }
+              else
+              {
+              llvm::dbgs() << "No register values specified in CRE\n";
+              }
+              );
 }
 
 void ConcreteReverseExec::dump2() {
