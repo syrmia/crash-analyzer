@@ -15,8 +15,8 @@
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/Debug.h"
-#include <sstream>
 #include <deque>
+#include <sstream>
 
 static constexpr unsigned FrameLevelDepthToGo = 10;
 static bool abortAnalysis = false;
@@ -1354,13 +1354,15 @@ bool llvm::crash_analyzer::TaintAnalysis::propagateTaint(
 
   // Propagate dereference level (from crash) from the Taint to the SrcTi.
   SrcTi.DerefLevel = Taint.DerefLevel;
-  // TO DO: Check if this if should be here, 
+  // TO DO: Check if this if should be here,
   // checks if register equivalence or mem equality played a role in comparison
-  // comparing a reg with mem location which messes with deref lvls, 
+  // comparing a reg with mem location which messes with deref lvls,
   // only let if reg = reg + 0
-  if(Taint.Offset.hasValue() == DestTi.Offset.hasValue() || 
-  (Taint.Op->isReg() && DestTi.Op->isReg() && Taint.Op->getReg() == DestTi.Op->getReg() && 
-  ((Taint.Offset && *Taint.Offset == 0)  || (DestTi.Offset && *DestTi.Offset == 0))))
+  if (Taint.Offset.hasValue() == DestTi.Offset.hasValue() ||
+      (Taint.Op->isReg() && DestTi.Op->isReg() &&
+       Taint.Op->getReg() == DestTi.Op->getReg() &&
+       ((Taint.Offset && *Taint.Offset == 0) ||
+        (DestTi.Offset && *DestTi.Offset == 0))))
     SrcTi.propagateDerefLevel(MI);
 
   // FIXME: Since now we have corefile content we can check if this constant
@@ -1639,7 +1641,6 @@ RegisterEquivalence *crash_analyzer::TaintAnalysis::getREAnalysis() {
   return REA;
 }
 
-
 // Finds a crash-start instruction.
 static MachineInstr *getCrashStartMI(const MachineFunction &MF) {
   for (auto &MBB : MF) {
@@ -1820,7 +1821,6 @@ void crash_analyzer::TaintAnalysis::transformBPtoSPTaints(
     // Update LastTaintedNode with the transformed TaintInfo.
     TaintDFG.updateLastTaintedNode(itr->Op, LastTaintedNodeForTheOp);
   }
-
 }
 
 // Return true if taint is terminated.
@@ -2220,7 +2220,6 @@ bool crash_analyzer::TaintAnalysis::runOnBlameMF(
     // Update TL_Of_Caller to be available in the parent call.
     if (CalleeNotInBT)
       mergeTaintList(*TL_Of_Caller, TL_Mbb);
-
   }
   assert(MF.begin() != MF.end() &&
          "A function should have at least one block.");

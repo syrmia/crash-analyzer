@@ -48,8 +48,7 @@ public:
   // which are the values read from corefile.
   ConcreteReverseExec(const MachineFunction *MF, MemoryWrapper &MW,
                       RegisterEquivalence *REAnalysis = nullptr)
-      : mf(MF), MemWrapper(MW),
-        REAnalysis(REAnalysis) {
+      : mf(MF), MemWrapper(MW), REAnalysis(REAnalysis) {
     CATI = getCATargetInfoInstance();
     if (MF->getCrashRegInfo().size())
       CREEnabled = true;

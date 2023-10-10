@@ -19,24 +19,18 @@ static cl::opt<bool> DisableCRE("disable-cre",
                                 cl::init(false));
 
 void ConcreteReverseExec::dump() {
-  LLVM_DEBUG(llvm::dbgs() << "\n****Concrete Register Values For Function: "
-                          << mf->getName() << "\n";
-              if(CurrentRegisterValues)
-              {
-                for (const auto &R
-                    : *CurrentRegisterValues) {
-                  if (R.Value != "")
-                    llvm::dbgs() << R.Name << ": " << R.Value << "\n";
-                  else
-                    llvm::dbgs() << R.Name << ": "
-                                << "<not available>\n";
-                }
-              }
-              else
-              {
-              llvm::dbgs() << "No register values specified in CRE\n";
-              }
-              );
+  LLVM_DEBUG(
+      llvm::dbgs() << "\n****Concrete Register Values For Function: "
+                   << mf->getName() << "\n";
+      if (CurrentRegisterValues) {
+        for (const auto &R : *CurrentRegisterValues) {
+          if (R.Value != "")
+            llvm::dbgs() << R.Name << ": " << R.Value << "\n";
+          else
+            llvm::dbgs() << R.Name << ": "
+                         << "<not available>\n";
+        }
+      } else { llvm::dbgs() << "No register values specified in CRE\n"; });
 }
 
 void ConcreteReverseExec::dump2() {
@@ -261,15 +255,14 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
       } else {
         std::string EqRegName = TRI.getRegAsmName(RegOffset.RegNum).lower();
         RetVal = getCurretValueInReg(EqRegName);
-        if(RegOffset.Offset)
-        {
+        if (RegOffset.Offset) {
           uint64_t RetValNum = 0;
           std::istringstream(RetVal) >> std::hex >> RetValNum;
           RetValNum += RegOffset.Offset;
           std::stringstream SS;
           SS << std::hex << RetValNum;
           SS >> RetVal;
-          RetVal = "0x" + RetVal; 
+          RetVal = "0x" + RetVal;
         }
         if (RetVal != "")
           break;

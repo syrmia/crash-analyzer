@@ -17,9 +17,9 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
-#include <algorithm>
 
 using namespace llvm;
 using namespace crash_analyzer;
@@ -163,13 +163,13 @@ class TaintDataFlowGraph {
 public:
   // Map operand to the latest taint node.
   // FIXME: This should be private.
-  std::map<const MachineOperand*, std::shared_ptr<Node>> lastTaintedNode;
+  std::map<const MachineOperand *, std::shared_ptr<Node>> lastTaintedNode;
 
   void addEdge(std::shared_ptr<Node> src, std::shared_ptr<Node> dest,
                EdgeType e_type = EdgeType::Assigment);
   void addNode(std::shared_ptr<Node> n);
 
-  void updateLastTaintedNode(const MachineOperand* Op, std::shared_ptr<Node> N);
+  void updateLastTaintedNode(const MachineOperand *Op, std::shared_ptr<Node> N);
   unsigned getBlameNodesSize() { return Nodes.size(); }
 
   Node *getCrashNode() { return Nodes[0].get(); }
