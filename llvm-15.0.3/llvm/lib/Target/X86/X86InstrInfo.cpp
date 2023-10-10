@@ -844,6 +844,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     return DestSourcePair{Dst,     Src,     None, 0,        nullptr,    None,
                           nullptr, nullptr, 0,    SrcScale, SrcIndexReg};
   }
+
   case X86::MOV8mr:
   case X86::MOV16mr:
   case X86::MOV32mr:
@@ -856,7 +857,14 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::OR8mr:
   case X86::OR16mr:
   case X86::OR32mr:
-  case X86::OR64mr:
+  case X86::OR64mr: {
+    const MachineOperand *Src = &(MI.getOperand(5));
+    if (!getMemOperandWithOffset(MI, BaseOp, Offset, OffsetIsScalable, TRI))
+      return None;
+    return DestSourcePair{*BaseOp, Offset, *Src};
+    // FIXME: Can Dest be scaled-index address in this case?
+  }
+
   case X86::SUB8mr:
   case X86::SUB16mr:
   case X86::SUB32mr:
@@ -871,6 +879,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     return DestSourcePair{*BaseOp, Offset, *Src};
     // FIXME: Can Dest be scaled-index address in this case?
   }
+
   // FIXME: Should here be Src2 as well
   case X86::SUB8i8:
   case X86::SUB16i16:
@@ -881,8 +890,10 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::ADD32i32:
   case X86::ADD64i32: {
     const MachineOperand *Dest = &(MI.getOperand(1));
-    const MachineOperand *Src = &(MI.getOperand(3));
-    return DestSourcePair{Dest, Src, None, None, nullptr, None, nullptr, 0, 0};
+    const MachineOperand *Src1 = &(MI.getOperand(3));
+    const MachineOperand *Src2 = &(MI.getOperand(0));
+    return DestSourcePair{Dest, Src1,    None,    None, Src2,
+                          None, nullptr, nullptr, 0};
   }
   case X86::ADD8ri8:
   case X86::ADD8ri:
@@ -1000,6 +1011,14 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::AND32ri8:
   case X86::AND64ri8:
   case X86::AND64ri32:
+  case X86::ADD8rr:
+  case X86::ADD16rr:
+  case X86::ADD32rr:
+  case X86::ADD64rr:
+  case X86::SUB8rr:
+  case X86::SUB16rr:
+  case X86::SUB32rr:
+  case X86::SUB64rr:
   case X86::OR8rr:
   case X86::OR16rr:
   case X86::OR32rr:
@@ -1024,20 +1043,6 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::PXORrr:
   case X86::PORrr:
   case X86::PANDrr:
-  case X86::ADD8rr:
-  case X86::ADD16rr:
-  case X86::ADD32rr:
-  case X86::ADD64rr:
-  // Already implemented in the function
-  // case X86::ADD8ri:
-  // case X86::ADD16ri:
-  // case X86::ADD32ri:
-  // case X86::ADD16ri8:
-  // case X86::ADD64ri32:
-  case X86::SUB8rr:
-  case X86::SUB16rr:
-  case X86::SUB32rr:
-  case X86::SUB64rr:
   case X86::SUBPDrr:
   case X86::IMUL16rr:
   case X86::IMUL32rr:
@@ -1074,6 +1079,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     const MachineOperand *Src = &(MI.getOperand(2));
     return DestSourcePair{*Dest, *Src};
   }
+
   case X86::TEST8mi:
   case X86::TEST16mi:
   case X86::TEST32mi: {
@@ -1174,11 +1180,17 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::OR16mi:
   case X86::OR32mi8:
   case X86::SHR64mi:
+  case X86::AND8mi:
+  case X86::SETCCm: {
+    if (!getMemOperandWithOffset(MI, BaseOp, Offset, OffsetIsScalable, TRI))
+      return None;
+    return DestSourcePair{*BaseOp, Offset, MI.getOperand(5)};
+  }
+
   case X86::SUB8mi:
   case X86::SUB8mi8:
   case X86::ADD8mi:
   case X86::ADD8mi8:
-  case X86::AND8mi:
   case X86::SUB16mi:
   case X86::SUB16mi8:
   case X86::ADD16mi:
@@ -1190,11 +1202,11 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
   case X86::SUB64mi32:
   case X86::SUB64mi8:
   case X86::ADD64mi32:
-  case X86::ADD64mi8:
-  case X86::SETCCm: {
+  case X86::ADD64mi8: {
     if (!getMemOperandWithOffset(MI, BaseOp, Offset, OffsetIsScalable, TRI))
       return None;
-    return DestSourcePair{*BaseOp, Offset, MI.getOperand(5)};
+    return DestSourcePair{BaseOp, BaseOp,  Offset,  Offset, &MI.getOperand(5),
+                          None,   nullptr, nullptr, 0};
   }
   case X86::DIV32r:
   case X86::DIV64r:

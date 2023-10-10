@@ -432,7 +432,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
       std::string SrcValStr = "";
       std::string RegName = TRI->getRegAsmName(Reg).lower();
-      if (DestSrc.Source->isReg()) {
+      if (!DestSrc.Source2 && DestSrc.Source && DestSrc.Source->isReg()) {
         auto SrcReg = DestSrc.Source->getReg();
         std::string SrcRegName = TRI->getRegAsmName(SrcReg).lower();
         SrcValStr = getCurretValueInReg(SrcRegName);
@@ -440,8 +440,8 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
           SrcValStr = getEqRegValue(const_cast<MachineInstr *>(&MI), SrcReg,
                                     *TII, *TRI);
         }
-      } else if (DestSrc.Source->isImm()) {
-        SrcVal = DestSrc.Source->getImm();
+      } else if (DestSrc.Source2 && DestSrc.Source2->isImm()) {
+        SrcVal = DestSrc.Source2->getImm();
         // Just put something to pass the if statement afterwards
         SrcValStr = "1";
       }
@@ -452,7 +452,7 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       }
 
       if (AddrStr != "" && SrcValStr != "") {
-        if (DestSrc.Source->isReg()) {
+        if (!(DestSrc.Source2 && DestSrc.Source2->isImm())) {
           std::istringstream(SrcValStr) >> std::hex >> SrcVal;
         }
         uint64_t Addr = 0;
