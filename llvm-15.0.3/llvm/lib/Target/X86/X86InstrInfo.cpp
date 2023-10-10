@@ -879,7 +879,6 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     return DestSourcePair{*BaseOp, Offset, *Src};
     // FIXME: Can Dest be scaled-index address in this case?
   }
-
   // FIXME: Should here be Src2 as well
   case X86::SUB8i8:
   case X86::SUB16i16:
