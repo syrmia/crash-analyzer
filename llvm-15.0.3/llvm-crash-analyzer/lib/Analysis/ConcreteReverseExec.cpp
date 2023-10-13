@@ -277,7 +277,7 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
         auto DestSrc = *OptDestSrc;
         if (DestSrc.Source->isReg() && DestSrc.SrcOffset.hasValue() &&
             DestSrc.Destination->isReg() && !DestSrc.DestOffset.hasValue() &&
-            DestSrc.Source->getReg() == Reg) {
+            DestSrc.Source->getReg() == DestSrc.Destination->getReg()) {
           auto BaseStr =
               getEqRegValue(&*std::prev(MI->getIterator()), Reg, TII, TRI);
           if (BaseStr != "") {
@@ -554,6 +554,7 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
   }
 }
 
+// Add implementation for conversion operations ( 32 bit to 64  bit )
 void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI)
 {
   LLVM_DEBUG(llvm::dbgs() << "Load instruction: " << MI;);
@@ -758,7 +759,7 @@ bool ConcreteReverseExec::executeAddToReg(const MachineInstr &MI, DestSourcePair
   return false;
 }
 */
-// TODO: Check alias registers
+// TODO: Alias registers on some places
 void ConcreteReverseExec::execute(const MachineInstr &MI) {
   // If the option is enabled, we skip the CRE of the MIs.
   if (!getIsCREEnabled())
