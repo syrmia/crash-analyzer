@@ -879,7 +879,7 @@ X86InstrInfo::getDestAndSrc(const MachineInstr &MI) const {
     return DestSourcePair{*BaseOp, Offset, *Src};
     // FIXME: Can Dest be scaled-index address in this case?
   }
-  // FIXME: Should here be Src2 as well
+
   case X86::SUB8i8:
   case X86::SUB16i16:
   case X86::SUB32i32:
@@ -11305,14 +11305,14 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
 // they are covered by isAddImmediate function
 int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
                               Optional<int64_t> Offset) const {
-  if (Offset.hasValue()) {
+  if (Offset) {
     if (!MO || MI.getNumOperands() < 4 || !MI.getOperand(0).isReg() ||
         !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg() ||
         !MI.getOperand(3).isImm() || MI.getOperand(3).getImm() != *Offset)
       return 0;
   } else {
-    if (!MO || MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() ||
-        !MO->isReg() || MI.getOperand(0).getReg() != MO->getReg())
+    if (!MO || !MO->isReg() || ((MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() || MI.getOperand(0).getReg() != MO->getReg()) &&
+    (!MI.getOperand(0).isImm() || MI.getNumOperands() < 4 || !MI.getOperand(3).isReg() || MI.getOperand(3).getReg() != MO->getReg())))
       return 0;
   }
   switch (MI.getOpcode()) {
@@ -11338,6 +11338,18 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
   case X86::SUB64mr:
   case X86::SUB64mi32:
   case X86::SUB64mi8:
+  case X86::SUB8ri8:
+  case X86::SUB8ri:
+  case X86::SUB16ri8:
+  case X86::SUB16ri:
+  case X86::SUB32ri8:
+  case X86::SUB32ri:
+  case X86::SUB64ri8:
+  case X86::SUB64ri32:
+  case X86::SUB8i8:
+  case X86::SUB16i16:
+  case X86::SUB32i32:
+  case X86::SUB64i32:
     return -1;
   case X86::ADD8rm:
   case X86::ADD8rr:
@@ -11359,6 +11371,18 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
   case X86::ADD64mr:
   case X86::ADD64mi32:
   case X86::ADD64mi8:
+  case X86::ADD8ri8:
+  case X86::ADD8ri:
+  case X86::ADD16ri8:
+  case X86::ADD16ri:
+  case X86::ADD32ri8:
+  case X86::ADD32ri:
+  case X86::ADD64ri8:
+  case X86::ADD64ri32:
+  case X86::ADD8i8:
+  case X86::ADD16i16:
+  case X86::ADD32i32:
+  case X86::ADD64i32:
     return 1;
   }
 }

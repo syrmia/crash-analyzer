@@ -1648,7 +1648,7 @@ static MachineInstr *getCrashStartMI(const MachineFunction &MF) {
          ++MIIt) {
       auto &MI = *MIIt;
       if (MI.getFlag(MachineInstr::CrashStart)) {
-        return (MachineInstr *)&MI;
+        return const_cast<MachineInstr *>(&MI);
       }
     }
   }
