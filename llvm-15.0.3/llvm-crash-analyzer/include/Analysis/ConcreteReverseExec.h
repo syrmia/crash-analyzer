@@ -70,26 +70,45 @@ public:
   // Reverse execution of the MI by updating the CurrentRegisterValues.
   void execute(const MachineInstr &MI);
   // implementation of various executions on X86 for now
-  Optional<uint64_t> extractValueOfOperand(const MachineInstr &MI, const MachineOperand *MO, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+  Optional<uint64_t> extractValueOfOperand(const MachineInstr &MI,
+                                           const MachineOperand *MO,
+                                           const TargetInstrInfo *TII,
+                                           const TargetRegisterInfo *TRI);
 
-  Optional<uint64_t> extractPreviousValueFromRegEq(const MachineInstr &MI, Register Reg, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+  Optional<uint64_t>
+  extractPreviousValueFromRegEq(const MachineInstr &MI, Register Reg,
+                                const TargetInstrInfo *TII,
+                                const TargetRegisterInfo *TRI);
 
   // adds the size of instruction if it is pc/rip reg indirect addresing
-  void pcRegisterAddressFixup(const MachineInstr &MI, std::string &RegName, uint64_t &Addr);
+  void pcRegisterAddressFixup(const MachineInstr &MI, std::string &RegName,
+                              uint64_t &Addr);
 
-  void executePush(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+  void executePush(const MachineInstr &MI, DestSourcePair &DestSrc,
+                   const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
 
-  void executeStore(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+  void executeStore(const MachineInstr &MI, DestSourcePair &DestSrc,
+                    const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
 
-  void executeAddToMem(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, int Sign);
+  void executeAddToMem(const MachineInstr &MI, DestSourcePair &DestSrc,
+                       const TargetInstrInfo *TII,
+                       const TargetRegisterInfo *TRI, int Sign);
 
-  bool executeAddToReg(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI, int Sign);
+  bool executeAddToReg(const MachineInstr &MI, DestSourcePair &DestSrc,
+                       const TargetInstrInfo *TII,
+                       const TargetRegisterInfo *TRI,
+                       const MachineRegisterInfo &MRI, int Sign);
 
-  void executeAdd(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI, int Sign);
+  void executeAdd(const MachineInstr &MI, DestSourcePair &DestSrc,
+                  const TargetInstrInfo *TII, const TargetRegisterInfo *TRI,
+                  const MachineRegisterInfo &MRI, int Sign);
 
-  void executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI);
+  void executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc,
+                   const TargetInstrInfo *TII, const TargetRegisterInfo *TRI,
+                   const MachineRegisterInfo &MRI);
 
-  bool areRegsAliases(const Register R1, const Register R2, const TargetRegisterInfo *TRI);
+  bool areRegsAliases(const Register R1, const Register R2,
+                      const TargetRegisterInfo *TRI);
 
   // Updates a pointer to register values when the other block is being
   // processed.
@@ -100,7 +119,6 @@ public:
   std::string getEqRegValue(MachineInstr *MI, Register &Reg,
                             const TargetInstrInfo &TII,
                             const TargetRegisterInfo &TRI);
-
 };
 
 #endif

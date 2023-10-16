@@ -72,3 +72,4 @@ pythonenv*
 /lldb/docs/python_api/
 
 output.txt
+clang-format.sh

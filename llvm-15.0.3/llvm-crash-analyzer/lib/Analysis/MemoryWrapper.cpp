@@ -14,7 +14,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mem-wrapper"
 
-
 crash_analyzer::MemoryWrapper::MemoryWrapper() {}
 
 Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
@@ -171,7 +170,6 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
     i -= alignmentOffset;
     alignmentOffset = 0;
   }
-
 
   alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   alignedAddr = addr - alignmentOffset;

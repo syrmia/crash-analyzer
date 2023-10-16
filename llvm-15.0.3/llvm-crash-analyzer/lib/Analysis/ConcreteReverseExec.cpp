@@ -307,47 +307,45 @@ std::string ConcreteReverseExec::getEqRegValue(MachineInstr *MI, Register &Reg,
   return RetVal;
 }
 
-Optional<uint64_t> ConcreteReverseExec::extractValueOfOperand(const MachineInstr &MI, const MachineOperand* MO, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI)
-{
-  if(MO->isReg())
-  {
+Optional<uint64_t> ConcreteReverseExec::extractValueOfOperand(
+    const MachineInstr &MI, const MachineOperand *MO,
+    const TargetInstrInfo *TII, const TargetRegisterInfo *TRI) {
+  if (MO->isReg()) {
     auto Reg = MO->getReg();
     std::string RegName = TRI->getRegAsmName(Reg).lower();
     auto ValStr = getCurretValueInReg(RegName);
     uint64_t Val = 0;
-    if(ValStr == "")
-    {
-      ValStr = getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TII, *TRI);
+    if (ValStr == "") {
+      ValStr =
+          getEqRegValue(const_cast<MachineInstr *>(&MI), {Reg}, *TII, *TRI);
       // We could return the value to the register!
-      if(ValStr != "")
-      {
+      if (ValStr != "") {
         std::istringstream(ValStr) >> std::hex >> Val;
         writeUIntRegVal(RegName, Val, ValStr.size() - 2);
       }
     }
-    if(ValStr != "")
-    {
+    if (ValStr != "") {
       std::istringstream(ValStr) >> std::hex >> Val;
       return Val;
     }
-  }
-  else if(MO->isImm())
-  {
+  } else if (MO->isImm()) {
     return static_cast<uint64_t>(MO->getImm());
   }
   return None;
 }
 
-Optional<uint64_t> ConcreteReverseExec::extractPreviousValueFromRegEq(const MachineInstr &MI, Register Reg, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI)
-{
+Optional<uint64_t> ConcreteReverseExec::extractPreviousValueFromRegEq(
+    const MachineInstr &MI, Register Reg, const TargetInstrInfo *TII,
+    const TargetRegisterInfo *TRI) {
   // TO DO: Machine Instr at the beginning of basic block
-  if(MI.getIterator() != MI.getParent()->begin())
-  {
+  if (MI.getIterator() != MI.getParent()->begin()) {
     // TO DO: Check if this is right in all situations
-    auto StrVal = getEqRegValue(const_cast<MachineInstr *>(&*std::prev(MI.getIterator())), Reg, *TII, *TRI);
-    if(StrVal == "") return None;
-    else
-    {
+    auto StrVal =
+        getEqRegValue(const_cast<MachineInstr *>(&*std::prev(MI.getIterator())),
+                      Reg, *TII, *TRI);
+    if (StrVal == "")
+      return None;
+    else {
       uint64_t Val = 0;
       std::istringstream(StrVal) >> std::hex >> Val;
       return Val;
@@ -356,131 +354,141 @@ Optional<uint64_t> ConcreteReverseExec::extractPreviousValueFromRegEq(const Mach
   return None;
 }
 
-bool ConcreteReverseExec::areRegsAliases(const Register R1, const Register R2, const TargetRegisterInfo *TRI)
-{
-  for(MCRegAliasIterator RAI(R1, TRI, true); RAI.isValid(); ++RAI)
-  {
-    if((*RAI).id() == R2.id()) return true;
+bool ConcreteReverseExec::areRegsAliases(const Register R1, const Register R2,
+                                         const TargetRegisterInfo *TRI) {
+  for (MCRegAliasIterator RAI(R1, TRI, true); RAI.isValid(); ++RAI) {
+    if ((*RAI).id() == R2.id())
+      return true;
   }
   return false;
 }
 
-void ConcreteReverseExec::pcRegisterAddressFixup(const MachineInstr &MI, std::string &RegName, uint64_t &Addr)
-{
-  if(CATI->isPCRegister(RegName))
-  {
+void ConcreteReverseExec::pcRegisterAddressFixup(const MachineInstr &MI,
+                                                 std::string &RegName,
+                                                 uint64_t &Addr) {
+  if (CATI->isPCRegister(RegName)) {
     auto InstSize = CATI->getInstSize(&MI);
-    // Crash analyzer could probably work without this assertion so change it to if else if necessary
+    // Crash analyzer could probably work without this assertion so change it to
+    // if else if necessary
     assert(InstSize.hasValue() && "Couldn't get size of instruction");
     Addr += *InstSize;
   }
 }
 
-void ConcreteReverseExec::executePush(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI)
-{
-   if (DestSrc.Destination && DestSrc.Destination->isReg()) {
-      auto Reg = DestSrc.Destination->getReg();
-      std::string RegName = TRI->getRegAsmName(Reg).lower();
-
-      auto OptAddr =  extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
-      if (OptAddr) {
-        uint64_t Addr = *OptAddr;
-        if (DestSrc.DestOffset.hasValue()) {
-
-            // Stack is already aligned on its address
-            LLVM_DEBUG(llvm::dbgs()
-                           << "Push instruction: " << MI << ", Destination: "
-                           << "(" << RegName << ")"
-                           << "+" << *DestSrc.DestOffset << "\n";);
-          lldb::SBError error;
-          // invalidate 8 bytes if size of instruction is not known
-          uint32_t byteSize = 8;
-
-          Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
-          if (BitSize.hasValue()) {
-            // TO DO: Check if this is right
-            byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
-          }
-
-          Optional<uint64_t> MemValOptional =
-              MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
-          LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
-          if (MemValOptional.hasValue() && DestSrc.Source && DestSrc.Source->isReg()) {
-            uint64_t MemVal = *MemValOptional;
-            std::string SrcRegName =
-            TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
-            writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
-            // 64 bit sp for x86
-            writeUIntRegVal(RegName, Addr - (*DestSrc.DestOffset));
-          }
-
-          MemWrapper.InvalidateAddress(Addr, byteSize);
-          dump();
-        }
-      }
-   }
-}
-
-void ConcreteReverseExec::executeStore(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI)
-{
+void ConcreteReverseExec::executePush(const MachineInstr &MI,
+                                      DestSourcePair &DestSrc,
+                                      const TargetInstrInfo *TII,
+                                      const TargetRegisterInfo *TRI) {
   if (DestSrc.Destination && DestSrc.Destination->isReg()) {
-      auto Reg = DestSrc.Destination->getReg();
-      std::string RegName = TRI->getRegAsmName(Reg).lower();
+    auto Reg = DestSrc.Destination->getReg();
+    std::string RegName = TRI->getRegAsmName(Reg).lower();
 
-      auto OptAddr = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
-      if (OptAddr) {
-        uint64_t Addr = *OptAddr;
-        if (DestSrc.DestOffset) {
+    auto OptAddr = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
+    if (OptAddr) {
+      uint64_t Addr = *OptAddr;
+      if (DestSrc.DestOffset.hasValue()) {
 
-          Addr += static_cast<uint64_t>(*DestSrc.DestOffset);
-          LLVM_DEBUG(llvm::dbgs()
-                          << "Store instruction: " << MI << ", Destination: "
-                          << "(" << RegName << ")"
-                          << "+" << *DestSrc.DestOffset << "\n";);
+        // Stack is already aligned on its address
+        LLVM_DEBUG(llvm::dbgs()
+                       << "Push instruction: " << MI << ", Destination: "
+                       << "(" << RegName << ")"
+                       << "+" << *DestSrc.DestOffset << "\n";);
+        lldb::SBError error;
+        // invalidate 8 bytes if size of instruction is not known
+        uint32_t byteSize = 8;
 
-          lldb::SBError error;
-          // invalidate 8 bytes if size of instruction is not known
-          uint32_t byteSize = 8;
-
-          Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
-          if (BitSize) {
-            // TO DO: Check if this is right
-            byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
-          }
-
-          pcRegisterAddressFixup(MI, RegName, Addr);
-
-          Optional<uint64_t> MemValOptional =
-              MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
-          LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
-          if (MemValOptional.hasValue() && DestSrc.Source && DestSrc.Source->isReg()) {
-            uint64_t MemVal = *MemValOptional;
-            std::string SrcRegName =
-                TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
-            writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
-          }
-          MemWrapper.InvalidateAddress(Addr, byteSize);
-          dump();
+        Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
+        if (BitSize.hasValue()) {
+          // TO DO: Check if this is right
+          byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
         }
+
+        Optional<uint64_t> MemValOptional =
+            MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
+        LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
+        if (MemValOptional.hasValue() && DestSrc.Source &&
+            DestSrc.Source->isReg()) {
+          uint64_t MemVal = *MemValOptional;
+          std::string SrcRegName =
+              TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
+          writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
+          // 64 bit sp for x86
+          writeUIntRegVal(RegName, Addr - (*DestSrc.DestOffset));
+        }
+
+        MemWrapper.InvalidateAddress(Addr, byteSize);
+        dump();
       }
     }
+  }
 }
 
-void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI, int Sign)
-{
-  if(DestSrc.Destination && DestSrc.Destination->isReg())
-  {
+void ConcreteReverseExec::executeStore(const MachineInstr &MI,
+                                       DestSourcePair &DestSrc,
+                                       const TargetInstrInfo *TII,
+                                       const TargetRegisterInfo *TRI) {
+  if (DestSrc.Destination && DestSrc.Destination->isReg()) {
+    auto Reg = DestSrc.Destination->getReg();
+    std::string RegName = TRI->getRegAsmName(Reg).lower();
+
+    auto OptAddr = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
+    if (OptAddr) {
+      uint64_t Addr = *OptAddr;
+      if (DestSrc.DestOffset) {
+
+        Addr += static_cast<uint64_t>(*DestSrc.DestOffset);
+        LLVM_DEBUG(llvm::dbgs()
+                       << "Store instruction: " << MI << ", Destination: "
+                       << "(" << RegName << ")"
+                       << "+" << *DestSrc.DestOffset << "\n";);
+
+        lldb::SBError error;
+        // invalidate 8 bytes if size of instruction is not known
+        uint32_t byteSize = 8;
+
+        Optional<uint32_t> BitSize = TII->getBitSizeOfMemoryDestination(MI);
+        if (BitSize) {
+          // TO DO: Check if this is right
+          byteSize = (*BitSize) / 8 + (*BitSize % 8 ? 1 : 0);
+        }
+
+        pcRegisterAddressFixup(MI, RegName, Addr);
+
+        Optional<uint64_t> MemValOptional =
+            MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
+        LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
+        if (MemValOptional.hasValue() && DestSrc.Source &&
+            DestSrc.Source->isReg()) {
+          uint64_t MemVal = *MemValOptional;
+          std::string SrcRegName =
+              TRI->getRegAsmName(DestSrc.Source->getReg()).lower();
+          writeUIntRegVal(SrcRegName, MemVal, byteSize * 2);
+        }
+        MemWrapper.InvalidateAddress(Addr, byteSize);
+        dump();
+      }
+    }
+  }
+}
+
+void ConcreteReverseExec::executeAdd(const MachineInstr &MI,
+                                     DestSourcePair &DestSrc,
+                                     const TargetInstrInfo *TII,
+                                     const TargetRegisterInfo *TRI,
+                                     const MachineRegisterInfo &MRI, int Sign) {
+  if (DestSrc.Destination && DestSrc.Destination->isReg()) {
     auto DestReg = DestSrc.Destination->getReg();
     std::string DestRegName = TRI->getRegAsmName(DestReg).lower();
 
     uint64_t SrcVal = 0;
     uint64_t DestVal = 0;
     Optional<uint64_t> OptSrcVal = None;
-    Optional<uint64_t> OptDestVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
+    Optional<uint64_t> OptDestVal =
+        extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
     std::string SrcRegName = "";
-    // Source2 is there only if it is an immediate, on X86 implementation for now
-    if(!DestSrc.Source2 && DestSrc.Source && DestSrc.Source->isReg())
-    {
+    // Source2 is there only if it is an immediate, on X86 implementation for
+    // now
+    if (!DestSrc.Source2 && DestSrc.Source && DestSrc.Source->isReg()) {
       auto SrcReg = DestSrc.Source->getReg();
       SrcRegName = TRI->getRegAsmName(SrcReg).lower();
       OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI);
@@ -489,24 +497,19 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
       // unless RegisterEquivalence has some equivalent registers
       // TODO: Add the case when adding reg to same reg ( 2 * reg )
       bool SrcDestMatch = areRegsAliases(DestReg, SrcReg, TRI);
-      if(!DestSrc.DestOffset && SrcDestMatch)
-      {
+      if (!DestSrc.DestOffset && SrcDestMatch) {
         OptSrcVal = extractPreviousValueFromRegEq(MI, SrcReg, TII, TRI);
       }
-    }
-    else if(DestSrc.Source2 && DestSrc.Source2->isImm())
-    {
+    } else if (DestSrc.Source2 && DestSrc.Source2->isImm()) {
       // empty reg name is because its not needed when extracting an immediate
       OptSrcVal = extractValueOfOperand(MI, DestSrc.Source2, TII, TRI);
     }
-    if(OptSrcVal && OptDestVal)
-    {
+    if (OptSrcVal && OptDestVal) {
       SrcVal = *OptSrcVal;
       DestVal = *OptDestVal;
 
       // Source is memory, then Dest is definitely a Register
-      if(DestSrc.SrcOffset && !DestSrc.Source2)
-      {
+      if (DestSrc.SrcOffset && !DestSrc.Source2) {
         // SrcVal is now the address
         SrcVal += *DestSrc.SrcOffset;
         pcRegisterAddressFixup(MI, SrcRegName, SrcVal);
@@ -516,32 +519,28 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
         lldb::SBError error;
         OptSrcVal = MemWrapper.ReadUnsignedFromMemory(SrcVal, byteSize, error);
         LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
-        if(OptSrcVal)
-        {
+        if (OptSrcVal) {
           DestVal -= Sign * (*OptSrcVal);
           writeUIntRegVal(DestRegName, DestVal, byteSize * 2);
           return;
         }
       }
       // Dest is memory, source is Reg or Immediate
-      else if(DestSrc.DestOffset)
-      {
+      else if (DestSrc.DestOffset) {
         DestVal += *DestSrc.DestOffset;
         pcRegisterAddressFixup(MI, DestRegName, DestVal);
         // TO DO: Check if this is right
         // byteSize is 8 at first if we cannot determine the size of mem dest
         uint32_t byteSize = 8;
         auto OptBitSize = TII->getBitSizeOfMemoryDestination(MI);
-        if(OptBitSize)
-        {
+        if (OptBitSize) {
           byteSize = *OptBitSize / 8 + (*OptBitSize % 8 ? 1 : 0);
         }
         lldb::SBError error;
         uint64_t Addr = DestVal;
         OptDestVal = MemWrapper.ReadUnsignedFromMemory(Addr, byteSize, error);
         LLVM_DEBUG(llvm::dbgs() << error.GetCString() << "\n";);
-        if(OptDestVal)
-        {
+        if (OptDestVal) {
           DestVal = *OptDestVal;
           DestVal -= Sign * SrcVal;
           MemWrapper.WriteMemory(Addr, &DestVal, byteSize, error);
@@ -550,8 +549,7 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
 
       }
       // Neither Dest nor Source are Mem, Dest is Reg
-      else
-      {
+      else {
         DestVal -= Sign * SrcVal;
         // TO DO: Check if this is right
         uint32_t bitSize = TRI->getRegSizeInBits(DestReg, MRI);
@@ -565,8 +563,11 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
 }
 
 // Add implementation for conversion operations ( 32 bit to 64  bit )
-void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI)
-{
+void ConcreteReverseExec::executeLoad(const MachineInstr &MI,
+                                      DestSourcePair &DestSrc,
+                                      const TargetInstrInfo *TII,
+                                      const TargetRegisterInfo *TRI,
+                                      const MachineRegisterInfo &MRI) {
   LLVM_DEBUG(llvm::dbgs() << "Load instruction: " << MI;);
   auto DestReg = DestSrc.Destination->getReg();
   std::string DestRegName = TRI->getRegAsmName(DestReg).lower();
@@ -576,31 +577,28 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
   uint64_t SrcVal = 0;
   Optional<uint64_t> OptSrcVal = None;
   OptDestVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
-  if(!OptDestVal) return;
+  if (!OptDestVal)
+    return;
   // Once we got the value we can invalidate the loaded register
   invalidateRegVal(DestRegName);
   DestVal = *OptDestVal;
 
-  if(DestSrc.Source && DestSrc.SrcOffset)
-  {
+  if (DestSrc.Source && DestSrc.SrcOffset) {
     auto SrcReg = DestSrc.Source->getReg();
     std::string SrcRegName = TRI->getRegAsmName(SrcReg).lower();
-
 
     bool SrcDestMatch = areRegsAliases(DestReg, SrcReg, TRI);
     // Cannot know value of memory if loading reg from (reg)offset,
     // unless RegisterEquivalence has some equivalent registers,
     // from previous instructions
-    if(SrcDestMatch)
-    {
+    if (SrcDestMatch) {
       OptSrcVal = extractPreviousValueFromRegEq(MI, SrcReg, TII, TRI);
-    }
-    else
-    {
+    } else {
       OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI);
     }
 
-    if(!OptSrcVal) return;
+    if (!OptSrcVal)
+      return;
     //  Calculating memory address
     SrcVal = *OptSrcVal;
     uint64_t PrevVal = SrcVal;
@@ -608,33 +606,30 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
 
     pcRegisterAddressFixup(MI, SrcRegName, SrcVal);
 
-    uint32_t BitSize = TRI->getRegSizeInBits(DestSrc.Destination->getReg(), MRI);
+    uint32_t BitSize =
+        TRI->getRegSizeInBits(DestSrc.Destination->getReg(), MRI);
     uint32_t ByteSize = BitSize / 8 + (BitSize % 8 ? 1 : 0);
 
     auto OptSrcMemSize = TII->getBitSizeOfMemorySource(MI);
-    
+
     lldb::SBError error;
     // This is necessary for extenstion load instructions (MOVSX on x86)
-    if(OptSrcMemSize)
-    {
-      uint32_t SrcBitSize = *OptSrcMemSize / 8 + (*OptSrcMemSize % 8 ? 1 : 0); 
+    if (OptSrcMemSize) {
+      uint32_t SrcBitSize = *OptSrcMemSize / 8 + (*OptSrcMemSize % 8 ? 1 : 0);
       MemWrapper.WriteMemory(SrcVal, &DestVal, SrcBitSize, error);
-    }
-    else
+    } else
       MemWrapper.WriteMemory(SrcVal, &DestVal, ByteSize, error);
     // No chance of error, it is just there for the function call
     // We know prev reg value, we can return it
-    if(SrcReg == DestReg)
-    {
+    if (SrcReg == DestReg) {
       writeUIntRegVal(SrcRegName, PrevVal, ByteSize * 2);
     }
-
   }
-  
 }
 
 /*
-void ConcreteReverseExec::executeAddToMem(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, int Sign)
+void ConcreteReverseExec::executeAddToMem(const MachineInstr &MI, DestSourcePair
+&DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, int Sign)
 {
   if (DestSrc.Destination) {
       auto Reg = DestSrc.Destination->getReg();
@@ -647,13 +642,14 @@ void ConcreteReverseExec::executeAddToMem(const MachineInstr &MI, DestSourcePair
       if (!DestSrc.Source2 && DestSrc.Source && DestSrc.Source->isReg()) {
         auto SrcReg = DestSrc.Source->getReg();
         std::string SrcRegName = TRI->getRegAsmName(SrcReg).lower();
-        OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI, SrcReg, SrcRegName);
-      } else if (DestSrc.Source2 && DestSrc.Source2->isImm()) {
+        OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI, SrcReg,
+SrcRegName); } else if (DestSrc.Source2 && DestSrc.Source2->isImm()) {
         // no need for register and reg name as it is an immediate
         OptSrcVal = extractValueOfOperand(MI, DestSrc.Source2, TII, TRI, 0, "");
       }
 
-      auto OptAddr = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI, Reg, RegName);
+      auto OptAddr = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI,
+Reg, RegName);
 
       if (OptAddr && OptSrcVal) {
         SrcVal = *OptSrcVal;
@@ -689,13 +685,15 @@ void ConcreteReverseExec::executeAddToMem(const MachineInstr &MI, DestSourcePair
     }
 }
 
-bool ConcreteReverseExec::executeAddToReg(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI, int Sign)
+bool ConcreteReverseExec::executeAddToReg(const MachineInstr &MI, DestSourcePair
+&DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const
+MachineRegisterInfo &MRI, int Sign)
 {
   auto Reg = DestSrc.Destination->getReg();
   std::string RegName = TRI->getRegAsmName(Reg).lower();
   uint64_t Val = 0;
-  auto OptVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI, Reg, RegName);
-  if(OptVal)
+  auto OptVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI, Reg,
+RegName); if(OptVal)
   {
     Val = *OptVal;
   }
@@ -711,18 +709,17 @@ bool ConcreteReverseExec::executeAddToReg(const MachineInstr &MI, DestSourcePair
   if (DestSrc.Source && DestSrc.Source->isReg() && !DestSrc.Source2) {
     SrcReg = DestSrc.Source->getReg();
     SrcRegStr = TRI->getRegAsmName(SrcReg).lower();
-    OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI, SrcReg, SrcRegStr);
-  
+    OptSrcVal = extractValueOfOperand(MI, DestSrc.Source, TII, TRI, SrcReg,
+SrcRegStr);
+
     // Cannot know value of memory if adding to reg from reg,
     // unless RegisterEquivalence has some equivalent registers
     // TODO: Add the case when adding reg to same reg ( 2 * reg )
     if (DestSrc.Source->getReg() == Reg) {
       // TO DO: Machine Instr at the beginning of basic block
       if (MI.getIterator() != MI.getParent()->begin()) {
-        OptSrcVal = extractValueOfOperand(*std::prev(&MI), DestSrc.Source, TII, TRI, SrcReg, SrcRegStr);
-        if (!OptSrcVal) {
-          invalidateRegVal(RegName);
-          dump();
+        OptSrcVal = extractValueOfOperand(*std::prev(&MI), DestSrc.Source, TII,
+TRI, SrcReg, SrcRegStr); if (!OptSrcVal) { invalidateRegVal(RegName); dump();
           return true;
         }
       } else {
@@ -801,12 +798,9 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
 
   if (OptDestSrc.hasValue()) {
     DestSourcePair &DestSrc = *OptDestSrc;
-    if(TII->isStore(MI))
-    {
+    if (TII->isStore(MI)) {
       executeStore(MI, DestSrc, TII, TRI);
-    }
-    else if(TII->isPush(MI))
-    {
+    } else if (TII->isPush(MI)) {
       executePush(MI, DestSrc, TII, TRI);
     }
     // Add to mem instructions
@@ -814,11 +808,12 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
     // X86TargetInstrInfo::isAddToDest function
     // along with getDestAndSrc function to
     // support more instructions
-    else if(DestSrc.DestOffset && (Sign = TII->isAddToDest(MI, const_cast<MachineOperand *>(DestSrc.Destination), DestSrc.DestOffset)))
-    {
+    else if (DestSrc.DestOffset &&
+             (Sign = TII->isAddToDest(
+                  MI, const_cast<MachineOperand *>(DestSrc.Destination),
+                  DestSrc.DestOffset))) {
       executeAdd(MI, DestSrc, TII, TRI, MRI, Sign);
     }
-
   }
 
   for (const MachineOperand &MO : MI.operands()) {
@@ -854,11 +849,11 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
       // SS << std::hex << regVal;
       // SS >> Val;
 
-      if(OptDestSrc)
-      {
+      if (OptDestSrc) {
         DestSourcePair &DestSrc = *OptDestSrc;
-        if(TII->isLoad(MI) && !DestSrc.DestOffset && DestSrc.Destination && DestSrc.Destination->isReg() && DestSrc.Destination->getReg() == MO.getReg())
-        {
+        if (TII->isLoad(MI) && !DestSrc.DestOffset && DestSrc.Destination &&
+            DestSrc.Destination->isReg() &&
+            DestSrc.Destination->getReg() == MO.getReg()) {
           executeLoad(MI, DestSrc, TII, TRI, MRI);
           dump();
           continue;
@@ -870,16 +865,15 @@ void ConcreteReverseExec::execute(const MachineInstr &MI) {
         // X86TargetInstrInfo::isAddToDest function
         // along with getDestAndSrc function to
         // support more instructions
-        else if(!DestSrc.DestOffset && (Sign = TII->isAddToDest(MI, const_cast<MachineOperand*>(&MO), DestSrc.DestOffset)))
-        {
+        else if (!DestSrc.DestOffset &&
+                 (Sign = TII->isAddToDest(MI, const_cast<MachineOperand *>(&MO),
+                                          DestSrc.DestOffset))) {
           executeAdd(MI, DestSrc, TII, TRI, MRI, Sign);
           dump();
           continue;
-        }
-        else 
-        {
+        } else {
           LLVM_DEBUG(llvm::dbgs() << "Concrete Rev Exec not supported for \n";
-                 MI.dump(););
+                     MI.dump(););
           invalidateRegVal(RegName);
           dump();
         }

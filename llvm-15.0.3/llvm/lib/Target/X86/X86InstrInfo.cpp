@@ -11306,21 +11306,20 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
 // destination register size
 Optional<uint32_t>
 X86InstrInfo::getBitSizeOfMemorySource(const MachineInstr &MI) const {
-  switch(MI.getOpcode())
-  {
-    default:
-      return None;
-    case X86::MOVSX16rm8:
-    case X86::MOVSX32rm8:
-    case X86::MOVSX64rm8:
-      return 8;
-    
-    case X86::MOVSX32rm16:
-    case X86::MOVSX64rm16:
-      return 16;
-    
-    case X86::MOVSX64rm32:
-      return 32;
+  switch (MI.getOpcode()) {
+  default:
+    return None;
+  case X86::MOVSX16rm8:
+  case X86::MOVSX32rm8:
+  case X86::MOVSX64rm8:
+    return 8;
+
+  case X86::MOVSX32rm16:
+  case X86::MOVSX64rm16:
+    return 16;
+
+  case X86::MOVSX64rm32:
+    return 32;
   }
 }
 
@@ -11334,8 +11333,12 @@ int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,
         !MI.getOperand(3).isImm() || MI.getOperand(3).getImm() != *Offset)
       return 0;
   } else {
-    if (!MO || !MO->isReg() || ((MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() || MI.getOperand(0).getReg() != MO->getReg()) &&
-    (!MI.getOperand(0).isImm() || MI.getNumOperands() < 4 || !MI.getOperand(3).isReg() || MI.getOperand(3).getReg() != MO->getReg())))
+    if (!MO || !MO->isReg() ||
+        ((MI.getNumOperands() < 1 || !MI.getOperand(0).isReg() ||
+          MI.getOperand(0).getReg() != MO->getReg()) &&
+         (!MI.getOperand(0).isImm() || MI.getNumOperands() < 4 ||
+          !MI.getOperand(3).isReg() ||
+          MI.getOperand(3).getReg() != MO->getReg())))
       return 0;
   }
   switch (MI.getOpcode()) {
