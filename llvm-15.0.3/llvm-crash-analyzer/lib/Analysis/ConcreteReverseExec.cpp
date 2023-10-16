@@ -356,6 +356,15 @@ Optional<uint64_t> ConcreteReverseExec::extractPreviousValueFromRegEq(const Mach
   return None;
 }
 
+bool ConcreteReverseExec::areRegsAliases(const Register R1, const Register R2, const TargetRegisterInfo *TRI)
+{
+  for(MCRegAliasIterator RAI(R1, TRI, true); RAI.isValid(); ++RAI)
+  {
+    if((*RAI).id() == R2.id()) return true;
+  }
+  return false;
+}
+
 void ConcreteReverseExec::pcRegisterAddressFixup(const MachineInstr &MI, std::string &RegName, uint64_t &Addr)
 {
   if(CATI->isPCRegister(RegName))
@@ -479,7 +488,8 @@ void ConcreteReverseExec::executeAdd(const MachineInstr &MI, DestSourcePair &Des
       // Cannot know value of reg if adding to reg from reg,
       // unless RegisterEquivalence has some equivalent registers
       // TODO: Add the case when adding reg to same reg ( 2 * reg )
-      if(!DestSrc.DestOffset && SrcReg == DestReg)
+      bool SrcDestMatch = areRegsAliases(DestReg, SrcReg, TRI);
+      if(!DestSrc.DestOffset && SrcDestMatch)
       {
         OptSrcVal = extractPreviousValueFromRegEq(MI, SrcReg, TII, TRI);
       }
@@ -568,7 +578,6 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
   OptDestVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
   if(!OptDestVal) return;
   // Once we got the value we can invalidate the loaded register
-  llvm::dbgs() << *OptDestVal << "\n";
   invalidateRegVal(DestRegName);
   DestVal = *OptDestVal;
 
@@ -578,10 +587,11 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
     std::string SrcRegName = TRI->getRegAsmName(SrcReg).lower();
 
 
+    bool SrcDestMatch = areRegsAliases(DestReg, SrcReg, TRI);
     // Cannot know value of memory if loading reg from (reg)offset,
     // unless RegisterEquivalence has some equivalent registers,
     // from previous instructions
-    if(SrcReg == DestReg)
+    if(SrcDestMatch)
     {
       OptSrcVal = extractPreviousValueFromRegEq(MI, SrcReg, TII, TRI);
     }

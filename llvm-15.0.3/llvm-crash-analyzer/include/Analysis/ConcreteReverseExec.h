@@ -89,6 +89,8 @@ public:
 
   void executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc, const TargetInstrInfo *TII, const TargetRegisterInfo *TRI, const MachineRegisterInfo &MRI);
 
+  bool areRegsAliases(const Register R1, const Register R2, const TargetRegisterInfo *TRI);
+
   // Updates a pointer to register values when the other block is being
   // processed.
   void setCurrentRegisterValues(
