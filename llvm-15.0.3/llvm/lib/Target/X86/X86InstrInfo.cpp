@@ -11301,6 +11301,29 @@ X86InstrInfo::getBitSizeOfMemoryDestination(const MachineInstr &MI) const {
   return None;
 }
 
+// only necessary for MOVSX instructions for now
+// as we cannot know the size of mem location from
+// destination register size
+Optional<uint32_t>
+X86InstrInfo::getBitSizeOfMemorySource(const MachineInstr &MI) const {
+  switch(MI.getOpcode())
+  {
+    default:
+      return None;
+    case X86::MOVSX16rm8:
+    case X86::MOVSX32rm8:
+    case X86::MOVSX64rm8:
+      return 8;
+    
+    case X86::MOVSX32rm16:
+    case X86::MOVSX64rm16:
+      return 16;
+    
+    case X86::MOVSX64rm32:
+      return 32;
+  }
+}
+
 // Doesn't report for add immediate to reg instructions,
 // they are covered by isAddImmediate function
 int X86InstrInfo::isAddToDest(const MachineInstr &MI, MachineOperand *MO,

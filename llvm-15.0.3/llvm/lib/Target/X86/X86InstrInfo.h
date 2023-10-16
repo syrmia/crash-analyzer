@@ -670,6 +670,11 @@ public:
   Optional<uint32_t>
   getBitSizeOfMemoryDestination(const MachineInstr &MI) const override;
 
+  // Only necessary for MOVSX instructions for now
+  // TO DO: Implement for other insts, if necessary
+  Optional<uint32_t>
+  getBitSizeOfMemorySource(const MachineInstr &MI) const override;
+
   // Doesn't report for add immediate instructions,
   // they are covered by isAddImmediate function
   int isAddToDest(const MachineInstr &MI, MachineOperand *MO,

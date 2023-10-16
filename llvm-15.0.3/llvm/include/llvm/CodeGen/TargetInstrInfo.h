@@ -2095,6 +2095,16 @@ public:
   virtual Optional<uint32_t>
   getBitSizeOfMemoryDestination(const MachineInstr &MI) const;
 
+  // Returns bit size of memory source, if MI's source operand is memory
+  // and if this method is implemented in target's InstrInfo,
+  // in other casese returns empty Optional
+  // This is needed for MOVSX, and similar instructions
+  // As we cannot know from destination reg size how big was
+  // the mem location
+
+  virtual Optional<uint32_t>
+  getBitSizeOfMemorySource(const MachineInstr &MI) const;
+
   // Returns 1 if an instruction is add to register, -1 id sub
   // to register if register Reg is src for that instruction
   // 0 otherwise

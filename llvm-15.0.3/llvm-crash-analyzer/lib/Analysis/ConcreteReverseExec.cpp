@@ -568,6 +568,7 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
   OptDestVal = extractValueOfOperand(MI, DestSrc.Destination, TII, TRI);
   if(!OptDestVal) return;
   // Once we got the value we can invalidate the loaded register
+  llvm::dbgs() << *OptDestVal << "\n";
   invalidateRegVal(DestRegName);
   DestVal = *OptDestVal;
 
@@ -600,8 +601,17 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI, DestSourcePair &De
     uint32_t BitSize = TRI->getRegSizeInBits(DestSrc.Destination->getReg(), MRI);
     uint32_t ByteSize = BitSize / 8 + (BitSize % 8 ? 1 : 0);
 
+    auto OptSrcMemSize = TII->getBitSizeOfMemorySource(MI);
+    
     lldb::SBError error;
-    MemWrapper.WriteMemory(SrcVal, &DestVal, ByteSize, error);
+    // This is necessary for extenstion load instructions (MOVSX on x86)
+    if(OptSrcMemSize)
+    {
+      uint32_t SrcBitSize = *OptSrcMemSize / 8 + (*OptSrcMemSize % 8 ? 1 : 0); 
+      MemWrapper.WriteMemory(SrcVal, &DestVal, SrcBitSize, error);
+    }
+    else
+      MemWrapper.WriteMemory(SrcVal, &DestVal, ByteSize, error);
     // No chance of error, it is just there for the function call
     // We know prev reg value, we can return it
     if(SrcReg == DestReg)
