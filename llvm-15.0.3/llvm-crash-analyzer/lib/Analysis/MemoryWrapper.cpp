@@ -16,6 +16,29 @@ using namespace llvm;
 
 crash_analyzer::MemoryWrapper::MemoryWrapper() {}
 
+void crash_analyzer::MemoryWrapper::dumpOneMemoryLocation(
+    std::string Label, uint64_t Addr, uint32_t ByteSize,
+    Optional<uint64_t> OptVal) {
+  LLVM_DEBUG(std::stringstream SS; std::string StrAddr; std::string StrVal;
+             SS << std::hex << Addr; SS >> StrAddr;
+             // Size of 64 bits, 16 hex nums
+             if (StrAddr.size() < 2 * 8) StrAddr =
+                 std::string(2 * 8 - StrAddr.size(), '0') + StrAddr;
+             llvm::dbgs() << Label << ": 0x" << StrAddr;
+             if (OptVal) {
+               SS.clear();
+               SS << std::hex << *OptVal;
+               SS >> StrVal;
+               if (StrVal.size() < 2 * ByteSize)
+                 StrVal =
+                     std::string(2 * ByteSize - StrVal.size(), '0') + StrVal;
+               llvm::dbgs() << " : 0x" << StrVal;
+             }
+
+             llvm::dbgs()
+             << ", byte size: " << ByteSize << "\n";);
+}
+
 Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
     uint64_t addr, uint32_t byte_size, lldb::SBError &error) {
 
@@ -25,7 +48,6 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
   uint64_t alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   uint64_t alignedAddr = addr - alignmentOffset;
   uint64_t Val = 0;
-
   // Only in one aligned location
   if (alignmentOffset + byte_size <= NUM_OF_BYTES_PER_ADDRESS &&
       this->ChangedMemoryAddresses.count(alignedAddr)) {
@@ -33,16 +55,12 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
     uint8_t validityMask = ((1U << byte_size) - 1) << alignmentOffset;
 
     uint8_t valid = (locationValidity & validityMask) ^ validityMask;
-
+    // if valid is zero it means that it really is valid
     if (valid != 0) {
       StrVal = "";
 
-      LLVM_DEBUG(std::string AddrVal; SS.clear(); SS << std::hex << addr;
-                 SS >> AddrVal; if (AddrVal.size() < 2 * 8) {
-                   AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-                 } llvm::dbgs() << "Addressing invalid location: "
-                                << "0x" << AddrVal
-                                << ", byte size: " << byte_size << "\n";);
+      dumpOneMemoryLocation("Addressing invalid location", addr, byte_size,
+                            None);
       return None;
     } else {
       Val = ((this->ChangedMemoryAddresses[alignedAddr].second &
@@ -51,11 +69,11 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
              (alignmentOffset * 8));
     }
   }
-  // More than one aligned locations are addressed by access 
+  // More than one aligned locations are addressed by access
   else if (alignmentOffset + byte_size > NUM_OF_BYTES_PER_ADDRESS &&
-             (this->ChangedMemoryAddresses.count(alignedAddr) ||
-              this->ChangedMemoryAddresses.count(alignedAddr +
-                                                 NUM_OF_BYTES_PER_ADDRESS))) {
+           (this->ChangedMemoryAddresses.count(alignedAddr) ||
+            this->ChangedMemoryAddresses.count(alignedAddr +
+                                               NUM_OF_BYTES_PER_ADDRESS))) {
     uint8_t locationValidity1 = 0xFF;
     uint8_t locationValidity2 = 0xFF;
 
@@ -71,23 +89,19 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
     uint8_t validityMask1 =
         ((1U << (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset)) - 1)
         << alignmentOffset;
-    uint8_t validityMask2 = ((
-        1U << (byte_size - (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset))) - 1);
+    uint8_t validityMask2 =
+        ((1U << (byte_size - (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset))) -
+         1);
 
     uint8_t valid1 = (locationValidity1 & validityMask1) ^ validityMask1;
     uint8_t valid2 = (locationValidity2 & validityMask2) ^ validityMask2;
 
     if (valid1 != 0 || valid2 != 0) {
       StrVal = "";
-      LLVM_DEBUG(std::string AddrVal; SS.clear(); SS << std::hex << addr;
-                 SS >> AddrVal; if (AddrVal.size() < 2 * 8) {
-                   AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-                 } llvm::dbgs() << "Addressing invalid location: "
-                                << "0x" << AddrVal
-                                << ", byte size: " << byte_size << "\n";);
+      dumpOneMemoryLocation("Addressing invalid location", addr, byte_size,
+                            None);
       return None;
-    }
-    else {
+    } else {
       uint64_t Val1 = 0;
       if (this->ChangedMemoryAddresses.count(alignedAddr)) {
         Val1 = this->ChangedMemoryAddresses[alignedAddr].second;
@@ -115,7 +129,7 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
               << (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) * 8));
     }
   }
-  // Read entirely from corefile, we haven't got this address in MemWrapper 
+  // Read entirely from corefile, we haven't got this address in MemWrapper
   else if (this->Dec != nullptr) {
     Val = this->Dec->getTarget()->GetProcess().ReadUnsignedFromMemory(
         addr, byte_size, error);
@@ -129,13 +143,7 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
     StrVal = std::string(2 * byte_size - StrVal.size(), '0') + StrVal;
   }
 
-  LLVM_DEBUG(std::string AddrVal; SS.clear(); SS << std::hex << addr;
-             SS >> AddrVal; if (AddrVal.size() < 2 * 8) {
-               AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-             } llvm::dbgs() << "Addressing valid location: "
-                            << "0x" << AddrVal << " : "
-                            << "0x" << StrVal << ", byte_size: " << byte_size
-                            << "\n";);
+  dumpOneMemoryLocation("Addressing valid location", addr, byte_size, Val);
   return Val;
 }
 
@@ -150,6 +158,7 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
   uint64_t alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   uint64_t alignedAddr = addr - alignmentOffset;
   std::stringstream SS;
+  // iterate 8 bytes per time
   for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
     uint8_t mask = 0xFF;
     if (this->ChangedMemoryAddresses.count(alignedAddr)) {
@@ -176,49 +185,32 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
 
   alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   alignedAddr = addr - alignmentOffset;
+  // iterate 8 bytes per time
   for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
     uint64_t Val = 0;
-    uint32_t counter = size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset ? NUM_OF_BYTES_PER_ADDRESS - alignmentOffset : size - i;
+    // counter = how many bits in byte should we read
+    uint32_t counter = size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+                           ? NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+                           : size - i;
     for (uint32_t j = 0; j < counter; j++)
-        Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
+      Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
 
     lldb::SBError err;
-    uint32_t shiftRight = (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8 >= 0 ? (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8 : 0;
+    uint32_t shiftRight =
+        (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8 >= 0
+            ? (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8
+            : 0;
     this->ChangedMemoryAddresses[alignedAddr].second &=
-        ~(((-1UL << 8 * alignmentOffset)) >>
-          shiftRight);
+        ~(((-1UL << 8 * alignmentOffset)) >> shiftRight);
     this->ChangedMemoryAddresses[alignedAddr].second |=
         (Val << 8 * alignmentOffset);
 
-    LLVM_DEBUG(
-        SS.clear(); std::string AddrVal;
-        SS << std::hex << (alignedAddr + alignmentOffset); SS >> AddrVal;
-        if (AddrVal.size() < 2 * 8) {
-          AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-        } SS.clear();
-        std::string ValStr; SS << std::hex << Val; SS >> ValStr;
-        uint32_t sizeToWrite = 0;
-        if (size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) {
-          if (ValStr.size() <
-              2 * (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset)) {
-            ValStr =
-                std::string(2 * (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) -
-                                ValStr.size(),
-                            '0') +
-                ValStr;
-          }
-          sizeToWrite = NUM_OF_BYTES_PER_ADDRESS - alignmentOffset;
-        } else {
-          if (ValStr.size() < 2 * (size - i)) {
-            ValStr = std::string(2 * (size - i) - ValStr.size(), '0') + ValStr;
-          }
-          sizeToWrite = size - i;
-        }
+    uint32_t sizeToWrite = size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+                               ? NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+                               : size - i;
+    dumpOneMemoryLocation("Writing location", alignedAddr + alignmentOffset,
+                          sizeToWrite, Val);
 
-        llvm::dbgs()
-        << "Writing location: "
-        << "0x" << AddrVal << " : "
-        << "0x" << ValStr << ", byte_size: " << sizeToWrite << "\n";);
     alignedAddr += NUM_OF_BYTES_PER_ADDRESS;
     i -= alignmentOffset;
     alignmentOffset = 0;
@@ -232,6 +224,7 @@ void crash_analyzer::MemoryWrapper::InvalidateAddress(uint64_t addr,
   uint64_t alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
   uint64_t alignedAddr = addr - alignmentOffset;
   std::stringstream SS;
+  // iterate 8 bytes per time
   for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
     uint8_t mask = (0xFFU >> (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset));
     if (i + NUM_OF_BYTES_PER_ADDRESS - alignmentOffset > size) {
@@ -247,75 +240,34 @@ void crash_analyzer::MemoryWrapper::InvalidateAddress(uint64_t addr,
       this->ChangedMemoryAddresses[alignedAddr] = {0xFF, Val};
     }
     this->ChangedMemoryAddresses[alignedAddr].first &= mask;
-
+    uint32_t sizeToInvalidate =
+        size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+            ? NUM_OF_BYTES_PER_ADDRESS - alignmentOffset
+            : size - i;
+    dumpOneMemoryLocation("Invalidating location",
+                          alignedAddr + alignmentOffset, sizeToInvalidate,
+                          None);
     alignedAddr += NUM_OF_BYTES_PER_ADDRESS;
     i -= alignmentOffset;
     alignmentOffset = 0;
   }
-
-  LLVM_DEBUG(alignmentOffset = addr % NUM_OF_BYTES_PER_ADDRESS;
-             alignedAddr = addr - alignmentOffset;
-             for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
-               SS.clear();
-               std::string AddrVal;
-               SS << std::hex << (alignedAddr + alignmentOffset);
-               SS >> AddrVal;
-               uint32_t sizeToWrite = 0;
-               if (size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) {
-                 sizeToWrite = NUM_OF_BYTES_PER_ADDRESS - alignmentOffset;
-               } else {
-                 sizeToWrite = size - i;
-               }
-               if (AddrVal.size() < 2 * 8) {
-                 AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-               }
-
-               llvm::dbgs()
-                   << "Invalidating location: "
-                   << "0x" << AddrVal << ", byte_size: " << sizeToWrite << "\n";
-               alignedAddr += NUM_OF_BYTES_PER_ADDRESS;
-               i -= alignmentOffset;
-               alignmentOffset = 0;
-             }
-
-  );
 
   this->dump();
 }
 
 void crash_analyzer::MemoryWrapper::dump() {
 
-  LLVM_DEBUG(
-      std::stringstream SS; std::string str;
-
-      for (auto MA = this->ChangedMemoryAddresses.begin(),
-           ME = this->ChangedMemoryAddresses.end();
-           MA != ME; MA++) {
-        for (uint32_t i = 0; i < NUM_OF_BYTES_PER_ADDRESS; i++) {
-          SS.clear();
-          std::string AddrVal;
-          SS << std::hex << (MA->first + i);
-          SS >> AddrVal;
-          if (AddrVal.size() < 2 * 8) {
-            AddrVal = std::string(2 * 8 - AddrVal.size(), '0') + AddrVal;
-          }
-          if (MA->second.first & (1 << i)) {
-            uint32_t Val =
-                (uint8_t)((MA->second.second & (0xFFUL << i * 8)) >> i * 8);
-            std::string ValStr;
-            SS.clear();
-            SS << std::hex << Val;
-            SS >> ValStr;
-            if (ValStr.size() < 2 * 1) {
-              ValStr = std::string(2 * 1 - ValStr.size(), '0') + ValStr;
-            }
-            llvm::dbgs() << "\tValid location: "
-                         << "0x" << AddrVal << ", byte_size: " << 1 << ", Val: "
-                         << "0x" << ValStr << "\n";
-          } else {
-            llvm::dbgs() << "\tInvalid location: "
-                         << "0x" << AddrVal << ", byte_size: " << 1 << "\n";
-          }
-        }
-      });
-}       
+  LLVM_DEBUG(for (auto MA = this->ChangedMemoryAddresses.begin(),
+                  ME = this->ChangedMemoryAddresses.end();
+                  MA != ME; MA++) {
+    for (uint32_t i = 0; i < NUM_OF_BYTES_PER_ADDRESS; i++) {
+      Optional<uint64_t> OptVal = None;
+      if (MA->second.first & (1 << i))
+        OptVal = (uint8_t)((MA->second.second & (0xFFUL << i * 8)) >> i * 8);
+      if (OptVal)
+        dumpOneMemoryLocation("\tValid location", MA->first + i, 1, OptVal);
+      else
+        dumpOneMemoryLocation("\tInvalid location", MA->first + i, 1, OptVal);
+    }
+  });
+}

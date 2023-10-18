@@ -35,6 +35,9 @@ public:
                    lldb::SBError &error);
   void InvalidateAddress(uint64_t addr, size_t size);
   void dump();
+
+  void dumpOneMemoryLocation(std::string Label, uint64_t Addr,
+                             uint32_t ByteSize, Optional<uint64_t> OptVal);
 };
 } // namespace crash_analyzer
 } // namespace llvm

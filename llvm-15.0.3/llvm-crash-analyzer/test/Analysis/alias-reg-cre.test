@@ -19,9 +19,9 @@
 # RUN: %S/Inputs/alias-reg-cre --print-potential-crash-cause-loc \
 # RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
 
-# CHECK: Writing location: 0x00007ffd4579d29c : 0x00000002, byte_size: 4
+# CHECK: Writing location: 0x00007ffd4579d29c : 0x00000002, byte size: 4
 # CHECK-NOT: Writing location: 0x00007ffd4579d2a0 :
-# CHECK: Writing location: 0x00007ffd4579d2bc : 0x00000002, byte_size: 4
+# CHECK: Writing location: 0x00007ffd4579d2bc : 0x00000002, byte size: 4
 # CHECK: Blame Function is f()
 # CHECK: From File {{.*}}:3:9
 

@@ -57,11 +57,11 @@
 # RUN: %S/Inputs/reg-eq-in-rev-exec --print-potential-crash-cause-loc \
 # RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
 
-# CHECK: Writing location: 0x00007ffe5f8146a8 : 0x0000000000000014, byte_size: 8
-# CHECK-NEXT: 	Valid location: 0x00007ffe5f8146a8, byte_size: 1, Val: 0x14
-# CHECK: Addressing valid location: 0x00007ffe5f8146b0 : 0x00007ffe5f8146c0, byte_size: 8
-# CHECK-NEXT: Addressing valid location: 0x00007ffe5f8146c0 : 0x000000000000000b, byte_size: 8
-# CHECK: Invalidating location: 0x00007ffe5f8146c0, byte_size: 8
-# CHECK: Addressing valid location: 0x00007ffe5f8146c8 : 0x000000000000000a, byte_size: 8
+# CHECK: Writing location: 0x00007ffe5f8146a8 : 0x0000000000000014, byte size: 8
+# CHECK-NEXT: 	Valid location: 0x00007ffe5f8146a8 : 0x14, byte size: 1
+# CHECK: Addressing valid location: 0x00007ffe5f8146b0 : 0x00007ffe5f8146c0, byte size: 8
+# CHECK-NEXT: Addressing valid location: 0x00007ffe5f8146c0 : 0x000000000000000b, byte size: 8
+# CHECK: Invalidating location: 0x00007ffe5f8146c0, byte size: 8
+# CHECK: Addressing valid location: 0x00007ffe5f8146c8 : 0x000000000000000a, byte size: 8
 # CHECK: Blame Function is f()
 # CHECK-NEXT: From File {{.*}}:17:10

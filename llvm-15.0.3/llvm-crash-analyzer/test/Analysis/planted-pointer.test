@@ -34,7 +34,7 @@
 # RUN: %S/Inputs/planted-pointer --print-potential-crash-cause-loc \
 # RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
 
-# CHECK: Invalidating location: 0x00007ffc21d1a850, byte_size: 8
+# CHECK: Invalidating location: 0x00007ffc21d1a850, byte size: 8
 # CHECK: Addressing invalid location: 0x00007ffc21d1a850, byte size: 8
 # CHECK: Blame Function is f()
 # CHECK-NEXT: From File {{.+}}:19:8

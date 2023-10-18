@@ -39,16 +39,16 @@
 # RUN: %S/Inputs/asm-reading-writing-unaligned --print-potential-crash-cause-loc \
 # RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
 
-# CHECK: Addressing valid location: 0x00007fff17d45884 : 0x44444445, byte_size: 4
-# CHECK: Writing location: 0x00007fff17d45884 : 0x44444444, byte_size: 4
-# CHECK: Addressing valid location: 0x00007fff17d45894 : 0x2222222244444444, byte_size: 8
-# CHECK: Invalidating location: 0x00007fff17d45894, byte_size: 4
-# CHECK-NEXT: Invalidating location: 0x00007fff17d45898, byte_size: 4
-# CHECK-NEXT: 	Invalid location: 0x00007fff17d45898, byte_size: 1
-# CHECK: 	Valid location: 0x00007fff17d4589c, byte_size: 1, Val: 0x01
-# CHECK: 	Valid location: 0x00007fff17d45890, byte_size: 1, Val: 0x04
-# CHECK: Writing location: 0x00007fff17d45884 : 0x44444444, byte_size: 4
-# CHECK-NEXT: Writing location: 0x00007fff17d45888 : 0x22222222, byte_size: 4
+# CHECK: Addressing valid location: 0x00007fff17d45884 : 0x44444445, byte size: 4
+# CHECK: Writing location: 0x00007fff17d45884 : 0x44444444, byte size: 4
+# CHECK: Addressing valid location: 0x00007fff17d45894 : 0x2222222244444444, byte size: 8
+# CHECK: Invalidating location: 0x00007fff17d45894, byte size: 4
+# CHECK-NEXT: Invalidating location: 0x00007fff17d45898, byte size: 4
+# CHECK-NEXT: 	Invalid location: 0x00007fff17d45898, byte size: 1
+# CHECK: 	Valid location: 0x00007fff17d4589c : 0x01, byte size: 1
+# CHECK: 	Valid location: 0x00007fff17d45890 : 0x04, byte size: 1
+# CHECK: Writing location: 0x00007fff17d45884 : 0x44444444, byte size: 4
+# CHECK-NEXT: Writing location: 0x00007fff17d45888 : 0x22222222, byte size: 4
 # CHECK: Blame Function is f()
 # CHECK-NEXT: From File {{.*}}:15:10
 

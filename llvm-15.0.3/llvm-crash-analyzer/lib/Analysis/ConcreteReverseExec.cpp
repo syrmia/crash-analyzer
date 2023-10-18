@@ -611,7 +611,6 @@ void ConcreteReverseExec::executeLoad(const MachineInstr &MI,
       MemWrapper.WriteMemory(SrcVal, &DestVal, SrcBitSize, error);
     } else
       MemWrapper.WriteMemory(SrcVal, &DestVal, ByteSize, error);
-    // No chance of error, it is just there for the function call
     // We know prev reg value, we can return it
     if (SrcReg == DestReg) {
       writeUIntRegVal(SrcRegName, PrevVal, ByteSize * 2);
