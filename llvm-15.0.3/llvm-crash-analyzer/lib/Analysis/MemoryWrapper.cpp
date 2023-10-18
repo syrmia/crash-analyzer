@@ -50,7 +50,9 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
                (NUM_OF_BYTES_PER_ADDRESS - byte_size - alignmentOffset) * 8)) >>
              (alignmentOffset * 8));
     }
-  } else if (alignmentOffset + byte_size > NUM_OF_BYTES_PER_ADDRESS &&
+  }
+  // More than one aligned locations are addressed by access 
+  else if (alignmentOffset + byte_size > NUM_OF_BYTES_PER_ADDRESS &&
              (this->ChangedMemoryAddresses.count(alignedAddr) ||
               this->ChangedMemoryAddresses.count(alignedAddr +
                                                  NUM_OF_BYTES_PER_ADDRESS))) {
@@ -70,7 +72,7 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
         ((1U << (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset)) - 1)
         << alignmentOffset;
     uint8_t validityMask2 = ((
-        1U << (byte_size - (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) - 1)));
+        1U << (byte_size - (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset))) - 1);
 
     uint8_t valid1 = (locationValidity1 & validityMask1) ^ validityMask1;
     uint8_t valid2 = (locationValidity2 & validityMask2) ^ validityMask2;
@@ -84,7 +86,8 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
                                 << "0x" << AddrVal
                                 << ", byte size: " << byte_size << "\n";);
       return None;
-    } else {
+    }
+    else {
       uint64_t Val1 = 0;
       if (this->ChangedMemoryAddresses.count(alignedAddr)) {
         Val1 = this->ChangedMemoryAddresses[alignedAddr].second;
@@ -112,7 +115,7 @@ Optional<uint64_t> crash_analyzer::MemoryWrapper::ReadUnsignedFromMemory(
               << (NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) * 8));
     }
   }
-
+  // Read entirely from corefile, we haven't got this address in MemWrapper 
   else if (this->Dec != nullptr) {
     Val = this->Dec->getTarget()->GetProcess().ReadUnsignedFromMemory(
         addr, byte_size, error);
@@ -175,20 +178,15 @@ void crash_analyzer::MemoryWrapper::WriteMemory(uint64_t addr, const void *buf,
   alignedAddr = addr - alignmentOffset;
   for (uint32_t i = 0; i < size; i += NUM_OF_BYTES_PER_ADDRESS) {
     uint64_t Val = 0;
-    if (size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset) {
-      for (uint32_t j = 0; j < NUM_OF_BYTES_PER_ADDRESS - alignmentOffset;
-           j++) {
+    uint32_t counter = size - i > NUM_OF_BYTES_PER_ADDRESS - alignmentOffset ? NUM_OF_BYTES_PER_ADDRESS - alignmentOffset : size - i;
+    for (uint32_t j = 0; j < counter; j++)
         Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
-      }
-    } else {
-      for (uint32_t j = 0; j < size - i; j++) {
-        Val |= ((uint64_t)((const uint8_t *)buf)[i + j]) << (j * 8);
-      }
-    }
+
     lldb::SBError err;
+    uint32_t shiftRight = (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8 >= 0 ? (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8 : 0;
     this->ChangedMemoryAddresses[alignedAddr].second &=
         ~(((-1UL << 8 * alignmentOffset)) >>
-          (NUM_OF_BYTES_PER_ADDRESS - size + i - alignmentOffset) * 8);
+          shiftRight);
     this->ChangedMemoryAddresses[alignedAddr].second |=
         (Val << 8 * alignmentOffset);
 
@@ -320,4 +318,4 @@ void crash_analyzer::MemoryWrapper::dump() {
           }
         }
       });
-}
+}       
