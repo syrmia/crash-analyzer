@@ -1,0 +1,48 @@
+## This is reproducer ( compiled with `clang++ -g -O0`)
+## #include <stdio.h>
+
+## typedef struct node {
+##    char *x;
+##    int *val;
+## } snode;
+##
+## typedef struct tree {
+##    snode *left;
+##    snode *right;
+## } stree;
+##
+## void print_info (stree *tr) {
+##    printf("%c\n", *(tr->left->x));
+##    printf("%d\n", tr->left->val[0]); // place of crash in the crashing function
+## }
+##
+## static void func1() {
+##    snode ln;
+##    snode rn;
+##    stree tr;
+##    tr.left = &ln;
+##   tr.right = &rn;
+##    char c = 'a';
+##    tr.left->x = &c;
+##    tr.left->val = NULL; // NULL value assigned; cause of crash
+##    print_info(&tr);
+## }
+##
+## int main() {
+##    func1();
+##    return 0;
+## }
+
+
+# RUN: %llvm-crash-analyzer -debug-only=taint-analysis \
+# RUN: --core-file=%S/Inputs/core.struct-field-blame-nesting-2 \ 
+# RUN: %S/Inputs/struct-field-blame-nesting-2.out < %s 2>&1 | FileCheck %s
+
+# XFAIL: *
+
+## No longer segfaults, it just doesn't support some operations, 
+## in this case it is OR64mi8, ENDBR64, TEST8ri, CMP64rr, NOOPW, 
+## CMP8i8, CDQE, NOOPL, CMP8ri in decompiled on demand funs
+
+# CHECK: Blame Function is func1
+# CHECK: From File {{.*}}:26

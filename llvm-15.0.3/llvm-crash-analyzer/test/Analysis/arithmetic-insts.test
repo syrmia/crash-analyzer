@@ -1,0 +1,119 @@
+# Produced with clang++ -g -O0 m.cpp -o m
+
+#void f()
+#{
+#    char a = 0x0F;
+#    short b = 0x00FF;
+#    int c = 0x00FFFFFF;
+#    long d = 0x00FFFFFFFFFFFFFF;
+#    int *p = nullptr;
+#
+#    long d1 = 0x0011111111111111;
+#    long d2 = 0x0022222222222222;
+#
+#    long db = 0x0;
+#    long da = 0x0;
+#
+#    char aa = 0x0;
+#
+#    // a = a + 1;
+#    // a = a - 2;
+#    
+#    // b = b + 1;
+#    // b = b - 2;
+#    // b = b + 0x1000;
+#    // b = b - 0x1001;
+#
+#    __asm__(
+#        "mov %0, %%al;"
+#        "add $1, %%al;"
+#        "sub $2, %%al;"
+#        "mov %%al, %0;"
+#        
+#        "mov %1, %%ax;"
+#        "add $1, %%ax;"
+#        "sub $2, %%ax;"
+#        "add $4096, %%ax;"
+#        "sub $4097, %%ax;"
+#        "mov %%ax, %1;"
+#        :"=m" (a), "=m" (b)
+#        :"0" (a), "1" (b)
+#    );
+#
+#
+#    c = c + 1;
+#    c = c - 2;
+#    c = c + 0x1000;
+#    c = c - 0x1001;
+#
+#    d = d + 1;
+#    d = d - 2;
+#    d = d + 0x1000;
+#    d = d - 0x1001;
+#
+#    d = d + d1 - d2;
+#
+#    __asm__(
+#        "movq %0, %%rax;"
+#       "movq $20, %%rbx;"
+#        "addq %%rbx, %%rax;"
+#        "movq %%rbx, %1;"
+#        "movq %%rax, %0;"
+#        :"=m" (d), "=m" (db)
+#        :"0" (d), "1" (db)
+#    );
+#
+#    __asm__(
+#        "movq $30, %%rax;"
+#        "addq %%rax, %0;"
+#        "movq %%rax, %1;"
+#        "subq $2121, %1;"
+#        :"=m" (d), "=m" (da)
+#        :"0" (d), "1" (da)
+#    );
+#
+#    __asm__(
+#        "mov $15, %%al;"
+#        "sub %%al, %0;"
+#        "mov %%al, %1;"
+#        "addb $11, %1;"
+#        :"=m" (a), "=m" (aa)
+#        :"0" (a), "1" (aa)
+#    );
+#
+#    *p = 1;
+#}
+#int main()
+#{
+#    f();
+#    return 0;
+#}
+
+# RUN: %llvm-crash-analyzer --core-file=%S/Inputs/core.arithmetic-insts \
+# RUN: %S/Inputs/arithmetic-insts --print-potential-crash-cause-loc \
+# RUN: --debug-only=mem-wrapper 2>&1 | FileCheck %s
+
+# CHECK: Addressing valid location: 0x00007ffd97d08997 : 0x1a, byte size: 1
+# CHECK: Writing location: 0x00007ffd97d08997 : 0x0f, byte size: 1
+# CHECK: Addressing valid location: 0x00007ffd97d089cf : 0xff, byte size: 1
+# CHECK: Writing location: 0x00007ffd97d089cf : 0x0e, byte size: 1
+# CHECK: Addressing valid location: 0x00007ffd97d08998 : 0xfffffffffffff7d5, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d08998 : 0x000000000000001e, byte size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef1e, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef00, byte size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeef00, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00eeeeeeeeeeeeec, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00fffffffffffffd, byte size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c0 : 0x00fffffffffffffd, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x0100000000000ffe, byte size: 8
+# CHECK: Writing location: 0x00007ffd97d089c0 : 0x00ffffffffffffff, byte size: 8
+# CHECK: Addressing valid location: 0x00007ffd97d089c8 : 0x00fffffd, byte size: 4
+# CHECK: Writing location: 0x00007ffd97d089c8 : 0x01000ffe, byte size: 4
+# CHECK: Writing location: 0x00007ffd97d089c8 : 0x00ffffff, byte size: 4
+# CHECK: Addressing valid location:  0x00007ffd97d089cc : 0x00fd, byte size: 2
+# CHECK: Writing location:  0x00007ffd97d089cc : 0x00ff, byte size: 2
+# CHECK: Addressing valid location: 0x00007ffd97d089cf : 0x0e, byte size: 1
+# CHECK: Writing location: 0x00007ffd97d089cf : 0x0f, byte size: 1
+
+# CHECK: Blame Function is f()
+# CHECK-NEXT: From File {{.*}}:7:10

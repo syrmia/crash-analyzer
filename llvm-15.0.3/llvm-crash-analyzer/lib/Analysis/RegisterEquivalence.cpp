@@ -266,7 +266,8 @@ bool RegisterEquivalence::applyLoad(MachineInstr &MI) {
   // First invalidate dest reg, since it is being rewritten.
   invalidateAllRegUses(MI, Dest);
 
-  // If SrcReg or SrcIndexReg is redefined (same as DestReg), set only identity equivalence.
+  // If SrcReg or SrcIndexReg is redefined (same as DestReg), set only identity
+  // equivalence.
   if (TRI->regsOverlap(DestReg, SrcReg) ||
       (srcDest->SrcIndexReg != nullptr && srcDest->SrcIndexReg->isReg() &&
        TRI->regsOverlap(DestReg, srcDest->SrcIndexReg->getReg()))) {

@@ -9,6 +9,7 @@
 #ifndef CRE_
 #define CRE_
 
+#include "Analysis/RegisterEquivalence.h"
 #include "Analysis/TaintAnalysis.h"
 #include "Target/CATargetInfo.h"
 #include "llvm/ADT/DenseSet.h"
@@ -32,6 +33,8 @@ class ConcreteReverseExec {
   // TODO: Add a pointer to current memory locations information.
   MachineFunction::RegisterCrashInfo *CurrentRegisterValues = nullptr;
   const MachineFunction *mf;
+  MemoryWrapper &MemWrapper;
+  RegisterEquivalence *REAnalysis;
 
   CATargetInfo *CATI;
 
@@ -43,7 +46,9 @@ class ConcreteReverseExec {
 public:
   // Init the curr reg values with the values from the 'regInfo' attribute,
   // which are the values read from corefile.
-  ConcreteReverseExec(const MachineFunction *MF) : mf(MF) {
+  ConcreteReverseExec(const MachineFunction *MF, MemoryWrapper &MW,
+                      RegisterEquivalence *REAnalysis = nullptr)
+      : mf(MF), MemWrapper(MW), REAnalysis(REAnalysis) {
     CATI = getCATargetInfoInstance();
     if (MF->getCrashRegInfo().size())
       CREEnabled = true;
@@ -64,6 +69,46 @@ public:
 
   // Reverse execution of the MI by updating the CurrentRegisterValues.
   void execute(const MachineInstr &MI);
+  // implementation of various executions on X86 for now
+  Optional<uint64_t> extractValueOfOperand(const MachineInstr &MI,
+                                           const MachineOperand *MO,
+                                           const TargetInstrInfo *TII,
+                                           const TargetRegisterInfo *TRI);
+
+  Optional<uint64_t>
+  extractPreviousValueFromRegEq(const MachineInstr &MI, Register Reg,
+                                const TargetInstrInfo *TII,
+                                const TargetRegisterInfo *TRI);
+
+  // adds the size of instruction if it is pc/rip reg indirect addresing
+  void pcRegisterAddressFixup(const MachineInstr &MI, std::string &RegName,
+                              uint64_t &Addr);
+
+  void executePush(const MachineInstr &MI, DestSourcePair &DestSrc,
+                   const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+
+  void executeStore(const MachineInstr &MI, DestSourcePair &DestSrc,
+                    const TargetInstrInfo *TII, const TargetRegisterInfo *TRI);
+
+  void executeAddToMem(const MachineInstr &MI, DestSourcePair &DestSrc,
+                       const TargetInstrInfo *TII,
+                       const TargetRegisterInfo *TRI, int Sign);
+
+  bool executeAddToReg(const MachineInstr &MI, DestSourcePair &DestSrc,
+                       const TargetInstrInfo *TII,
+                       const TargetRegisterInfo *TRI,
+                       const MachineRegisterInfo &MRI, int Sign);
+
+  void executeAdd(const MachineInstr &MI, DestSourcePair &DestSrc,
+                  const TargetInstrInfo *TII, const TargetRegisterInfo *TRI,
+                  const MachineRegisterInfo &MRI, int Sign);
+
+  void executeLoad(const MachineInstr &MI, DestSourcePair &DestSrc,
+                   const TargetInstrInfo *TII, const TargetRegisterInfo *TRI,
+                   const MachineRegisterInfo &MRI);
+
+  bool areRegsAliases(const Register R1, const Register R2,
+                      const TargetRegisterInfo *TRI);
 
   // Updates a pointer to register values when the other block is being
   // processed.
@@ -71,6 +116,9 @@ public:
       MachineFunction::RegisterCrashInfo *CurrentRegisterValues) {
     this->CurrentRegisterValues = CurrentRegisterValues;
   }
+  std::string getEqRegValue(MachineInstr *MI, Register &Reg,
+                            const TargetInstrInfo &TII,
+                            const TargetRegisterInfo &TRI);
 };
 
 #endif

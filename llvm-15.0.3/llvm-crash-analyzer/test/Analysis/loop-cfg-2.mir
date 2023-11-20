@@ -53,14 +53,15 @@
 # CHECK: MOV32mr $rbp, 1, $noreg, -16, $noreg, $eax
 # CHECK: $eax = ADD32ri8 $eax(tied-def 0), 1, implicit-def $eflags
 # CHECK: $eax = MOV32rm $rbp, 1, $noreg, -16, $noreg
-
-# CHECK: MOV32mr $rbp, 1, $noreg, -12, $noreg, $eax
-# CHECK: Add to TL: {reg:$eax}
+# Register equivalence detected equivalence prior to this moment
+# CHECK: Add to TL: {reg:$rbp; off:-16}
 # CHECK: Remove from TL: {reg:$rbp; off:-12}
 
+# CHECK: MOV32mr $rbp, 1, $noreg, -12, $noreg, $eax
+# Deleted a check here bc of reg equivalence
+
 # CHECK: $eax = MOV32rm $rbp, 1, $noreg, -16, $noreg
-# CHECK: Add to TL: {reg:$rbp; off:-16}
-# CHECK: Remove from TL: {reg:$eax}
+# Deleted a check here bc of reg equivalence
 
 ## BB.3
 # CHECK: CMP32mi8 $rbp, 1, $noreg, -16, $noreg, 4, implicit-def $eflags

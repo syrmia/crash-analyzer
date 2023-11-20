@@ -53,12 +53,10 @@ public:
                                  FileSpec &file_spec) override {
     return Status();
   }
-
   Status GetFileLoadAddress(const llvm::StringRef &file_name,
                             lldb::addr_t &load_addr) override {
     return Status();
   }
-
   class Factory {
   public:
     llvm::Expected<std::unique_ptr<CoreFileProtocol>>

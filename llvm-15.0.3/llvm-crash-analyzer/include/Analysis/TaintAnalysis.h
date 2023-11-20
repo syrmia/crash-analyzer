@@ -27,6 +27,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Analysis/MemoryWrapper.h"
+
 struct Node;
 class TaintDataFlowGraph;
 class RegisterEquivalence;
@@ -57,9 +59,11 @@ struct TaintInfo {
   std::tuple<unsigned, int, int> getTuple() const;
 
   int DerefLevel = 0;
-  void propagateDerefLevel(const MachineInstr& MI);
+  void propagateDerefLevel(const MachineInstr &MI);
 
   bool IsGlobal = false;
+  // Added for differentiating reg + off from memory pointed by (reg)+off
+  bool IsDeref = false;
 
   friend bool operator==(const TaintInfo &T1, const TaintInfo &T2);
   friend bool operator!=(const TaintInfo &T1, const TaintInfo &T2);
@@ -74,6 +78,8 @@ private:
   StringRef MirDotFileName;
   SmallVector<TaintInfo, 8> TaintList;
   Decompiler *Dec = nullptr;
+  MemoryWrapper MemWrapper;
+
   // We use this flag to avoid decompilation on demand
   // for calls in the case of llvm-crash-analyzer-ta tool.
   bool isCrashAnalyzerTATool = false;
@@ -86,6 +92,7 @@ private:
 
   // Used for functions out of the backtrace.
   SmallVector<TaintInfo, 8> TL_Of_Call;
+
 public:
   TaintAnalysis(StringRef TaintDotFileName, StringRef MirDotFileName,
                 bool PrintPotentialCrashCauseLocation);
